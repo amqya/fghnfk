@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>UniMatch — Swipe your way to the right college</title>
+  <meta name="description" content="Filter, then swipe through every U.S. college to build your shortlist." />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand" id="brandHome">
+      <span class="logo">🎓</span>
+      <span class="brand-name">UniMatch</span>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn" data-go="filters">Filters</button>
+      <button class="nav-btn" data-go="deck">Swipe</button>
+      <button class="nav-btn" data-go="list">My List <span class="pill" id="savedPill">0</span></button>
+    </nav>
+  </header>
+
+  <main id="app">
+
+    <!-- ============ FILTERS ============ -->
+    <section class="view" id="view-filters">
+      <div class="hero">
+        <h1>Find your college the fun way.</h1>
+        <p>Set what matters to you, then swipe through matching schools — one card at a
+          time. Keep the ones you like, pass on the rest, and build a shortlist.
+          Every degree-granting U.S. college is in here, so you won't miss one.</p>
+      </div>
+
+      <form id="filterForm" class="filters">
+        <div class="filter-grid">
+
+          <fieldset class="fgroup">
+            <legend>Region</legend>
+            <div class="chips" data-name="region"></div>
+          </fieldset>
+
+          <fieldset class="fgroup">
+            <legend>State <span class="hint">optional</span></legend>
+            <input type="search" id="stateSearch" placeholder="Type a state…" autocomplete="off" />
+            <div class="chips scroll" data-name="state"></div>
+          </fieldset>
+
+          <fieldset class="fgroup">
+            <legend>Degree focus</legend>
+            <div class="chips" data-name="degree"></div>
+          </fieldset>
+
+          <fieldset class="fgroup">
+            <legend>School type</legend>
+            <div class="chips" data-name="control"></div>
+          </fieldset>
+
+          <fieldset class="fgroup">
+            <legend>Size</legend>
+            <div class="chips" data-name="sizeCategory"></div>
+          </fieldset>
+
+          <fieldset class="fgroup">
+            <legend>Setting</legend>
+            <div class="chips" data-name="setting"></div>
+          </fieldset>
+
+          <fieldset class="fgroup">
+            <legend>Selectivity</legend>
+            <div class="chips" data-name="selectivity"></div>
+          </fieldset>
+
+          <fieldset class="fgroup">
+            <legend>Max net price <span class="hint" id="costLabel">no limit</span></legend>
+            <input type="range" id="costRange" min="0" max="60000" step="1000" value="60000" />
+            <p class="tiny">Average yearly cost after aid. Schools with unknown cost still appear.</p>
+          </fieldset>
+
+          <fieldset class="fgroup wide">
+            <legend>Fields of study <span class="hint">optional — matches a school's most popular majors</span></legend>
+            <input type="search" id="majorSearch" placeholder="Search a field, e.g. Engineering…" autocomplete="off" />
+            <div class="chips scroll" data-name="major"></div>
+          </fieldset>
+
+          <fieldset class="fgroup wide">
+            <legend>Community &amp; mission <span class="hint">optional</span></legend>
+            <div class="chips" data-name="mission"></div>
+          </fieldset>
+
+        </div>
+
+        <div class="filter-actions">
+          <button type="button" class="btn ghost" id="resetBtn">Reset</button>
+          <button type="submit" class="btn primary" id="applyBtn">Show <span id="matchCount">…</span> matches →</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ============ DECK ============ -->
+    <section class="view" id="view-deck" hidden>
+      <div class="deck-head">
+        <button class="btn ghost small" data-go="filters">← Filters</button>
+        <div class="deck-progress"><span id="deckPos">0</span> / <span id="deckTotal">0</span></div>
+        <button class="btn ghost small" id="undoBtn" disabled>↺ Undo</button>
+      </div>
+
+      <div class="deck" id="deck">
+        <!-- cards injected here -->
+      </div>
+
+      <div class="deck-empty" id="deckEmpty" hidden>
+        <div class="empty-emoji">🎉</div>
+        <h2 id="emptyTitle">That's every match!</h2>
+        <p id="emptyMsg">You've been through all matching schools.</p>
+        <div class="empty-actions">
+          <button class="btn primary" data-go="list">See my list →</button>
+          <button class="btn ghost" data-go="filters">Adjust filters</button>
+          <button class="btn ghost" id="reviewPassed" hidden>Reconsider passed</button>
+        </div>
+      </div>
+
+      <div class="deck-controls" id="deckControls">
+        <button class="round pass" id="btnPass" title="Pass (←)">✕</button>
+        <button class="round info" id="btnInfo" title="Read more">ℹ</button>
+        <button class="round save" id="btnSave" title="Save (→)">♥</button>
+      </div>
+    </section>
+
+    <!-- ============ MY LIST ============ -->
+    <section class="view" id="view-list" hidden>
+      <div class="list-head">
+        <h1>My shortlist</h1>
+        <p id="listSummary" class="muted"></p>
+      </div>
+      <div class="list-tools">
+        <button class="btn ghost small" id="copyList">Copy list</button>
+        <button class="btn ghost small" id="clearSaved">Clear list</button>
+        <button class="btn ghost small" data-go="deck" id="keepSwiping">Keep swiping →</button>
+      </div>
+      <div id="savedList" class="saved-list"></div>
+      <div id="savedEmpty" class="muted center pad">
+        No saved colleges yet. Head to <button class="linklike" data-go="deck">Swipe</button> and start saving the ones you like.
+      </div>
+    </section>
+
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
