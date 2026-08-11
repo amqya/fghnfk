@@ -81,8 +81,9 @@ body {
 /* ---------- top bar ---------- */
 .topbar {
   position: sticky; top: 0; z-index: 30;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 11px clamp(14px, 4vw, 40px);
+  display: flex; align-items: center; justify-content: space-between; gap: 10px 12px;
+  flex-wrap: wrap;
+  padding: 11px clamp(12px, 4vw, 40px);
   background: var(--topbar-bg);
   backdrop-filter: saturate(160%) blur(14px);
   border-bottom: 1px solid var(--line);
@@ -90,7 +91,7 @@ body {
 .brand { display: flex; align-items: center; gap: 9px; cursor: pointer; }
 .logo { font-size: 21px; }
 .brand-name { font-weight: 800; letter-spacing: -.2px; font-size: 18px; color: var(--ink); }
-.nav { display: flex; gap: 4px; }
+.nav { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
 .nav-btn {
   border: 0; background: transparent; color: var(--ink-soft); font-weight: 600;
   padding: 8px 13px; border-radius: 999px; cursor: pointer; font-size: 14px;
@@ -104,8 +105,8 @@ body {
   display: inline-flex; align-items: center; justify-content: center;
 }
 .nav-btn:not(.active) .pill { background: var(--accent); color: #fff; }
-.theme-toggle { border: 1px solid var(--line); background: var(--chip-bg); cursor: pointer; font-size: 16px;
-  width: 36px; height: 36px; border-radius: 999px; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; }
+.theme-toggle { border: 1.5px solid var(--accent); background: var(--chip-bg); cursor: pointer; font-size: 16px;
+  width: 38px; height: 38px; border-radius: 999px; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .theme-toggle:hover { background: var(--hover-ghost); }
 
 #app { max-width: 1060px; margin: 0 auto; padding: clamp(16px, 3vw, 34px); }
