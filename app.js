@@ -213,6 +213,32 @@
     if (s == null) return r; if (r == null) return s;
     return Math.round(s * 0.55 + r * 0.45);
   };
+  const clamp = n => Math.max(0, Math.min(100, Math.round(n)));
+  // Estimated Greek-life presence. Not in federal data; built from the signal that
+  // actually tracks it — residential/traditional campus, 4-year, secular, larger.
+  const greekEst = c => {
+    const r = residentialScore(c);
+    if (r == null) return null;
+    let s = r * 0.7;
+    s += c.degree === "4-year" ? 12 : -22;
+    s += c.flags.religious ? -16 : 8;          // many religious schools restrict Greek life
+    if (c.size != null) s += c.size >= 8000 ? 12 : c.size >= 2000 ? 6 : c.size < 800 ? -8 : 0;
+    if (c.control === "For-profit") s -= 25;
+    return clamp(s);
+  };
+  // Estimated party scene. Same caveat — a rough proxy, not a student poll.
+  const partyEst = c => {
+    const r = residentialScore(c);
+    if (r == null) return null;
+    let s = r * 0.75;
+    s += c.degree === "4-year" ? 8 : -24;
+    s += c.flags.religious ? -16 : 6;
+    if (c.size != null) s += c.size >= 10000 ? 10 : c.size < 1000 ? -6 : 0;
+    const a = academicScore(c);
+    if (a != null && a >= 92) s -= 6;          // heavy grind culture tempers the party rep a bit
+    if (c.control === "For-profit") s -= 25;
+    return clamp(s);
+  };
 
   // ---------- matching ----------
   function passes(c) {
@@ -341,6 +367,8 @@
     // feel metrics (main view) — estimated from official stats
     const feel = [
       metricRow("Social scene", socialScore(c), "Bigger + more residential = livelier", ""),
+      metricRow("Greek life", greekEst(c), "Rough estimate — federal data has none; see reviews below", "warm"),
+      metricRow("Party scene", partyEst(c), "Rough estimate from how residential the campus is", "warm"),
       metricRow("Student happiness", c.retention, "Freshman return rate — a proxy for how much students like it", "good"),
       metricRow("Academic pressure", academicScore(c), c.satAvg ? `Avg SAT ~${fmt(c.satAvg)}` : "", "warm"),
       metricRow("Campus scale", scaleScore(c), c.size ? `${fmt(c.size)} undergrads` : "", ""),
@@ -391,7 +419,7 @@
     const links = [
       c.url ? `<a href="${encodeURI(c.url)}" target="_blank" rel="noopener">Official site ↗</a>` : "",
       `<a href="https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(c.name)}" target="_blank" rel="noopener">Wikipedia ↗</a>`,
-      `<a href="https://www.niche.com/colleges/search/best-colleges/?q=${encodeURIComponent(c.name)}" target="_blank" rel="noopener">Student reviews (Niche) ↗</a>`,
+      `<a href="https://www.niche.com/colleges/search/best-colleges/?q=${encodeURIComponent(c.name)}" target="_blank" rel="noopener">Student reviews — Greek life, parties &amp; happiness ↗</a>`,
       `<a href="https://www.google.com/maps/search/${encodeURIComponent(c.name + " " + c.city + " " + c.state)}" target="_blank" rel="noopener">Map ↗</a>`,
     ].join("");
 
@@ -408,10 +436,8 @@
         <div class="badges">${badges}</div>
         <div class="quickstats">${qs.map(([k, v]) => `<div class="qs"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")}</div>
         <p class="summary">${esc(summarize(c))}</p>
-        <div class="metrics-head">Campus vibe <span class="est-tag" title="Estimated from official statistics (size, retention, selectivity, diversity) — not student opinion polls.">estimated</span></div>
+        <div class="metrics-head">Campus vibe <span class="est-tag" title="Estimated from official statistics (size, retention, selectivity, diversity, how residential the campus is) — not student opinion polls.">estimated</span></div>
         <div class="metrics">${feel}</div>
-        <a class="studentlife-link" href="https://www.niche.com/colleges/search/best-colleges/?q=${encodeURIComponent(c.name)}" target="_blank" rel="noopener">
-          🎉 Greek life, party scene &amp; real student reviews ↗</a>
         <button type="button" class="readmore-btn">Read more ▾</button>
         <div class="details hidden">
           ${admHtml}
@@ -420,10 +446,10 @@
             ${metricRow("Residential vibe", resScore, resScore != null ? "Higher = more full-time, live-on-campus students" : "", "raw2")}
             ${metricRow("Affordability", c.netPrice != null ? Math.max(0, Math.round(100 - c.netPrice / 500)) : null, c.netPrice != null ? `$${fmt(c.netPrice)}/yr average net price` : "", "good")}
           </div>
-          <p class="note">Social scene, Greek life, party culture and overall happiness are rated by
-            students, not in the federal data behind this app — the “Student reviews (Niche)” link below
-            has those. The bars here are built from official stats: retention (how many students stay),
-            selectivity (academic intensity), size, and diversity.</p>
+          <p class="note">All “campus vibe” bars are <b>estimates</b> from official stats (size, how
+            residential the campus is, retention, selectivity, diversity) — not student surveys. Greek
+            life and party scene especially are rough proxies. For ratings students actually give, use the
+            <b>Student reviews</b> link below.</p>
           ${kv.length ? `<h3>By the numbers</h3><div class="kv">${kv.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join("")}</div>` : ""}
           ${divRows ? `<h3>Student body</h3>${divRows}` : ""}
           <h3>Fields offered here</h3>
