@@ -49,22 +49,31 @@
   function classify(c) {
     const u = userSAT();
     if (u == null) return null;
-    const adm = c.admitRate, s25 = c.sat25, s75 = c.sat75;
-    // hyper-selective: a reach for almost everyone
-    if (adm != null && adm < 15) {
-      if (s75 && u >= s75 && adm >= 10) return "target";
-      return "reach";
-    }
+    const adm = c.admitRate;
+    // Effective admitted-SAT range: use the real 25th/75th percentiles, or
+    // derive a spread from the average SAT so a strong score always counts.
+    let s25 = c.sat25, s75 = c.sat75;
+    if ((!s25 || !s75) && c.satAvg) { s25 = c.satAvg - 90; s75 = c.satAvg + 90; }
+
+    // Truly hyper-selective (<8% admit): holistic and hard for everyone, even
+    // top scorers — only a target if you're at/above the 75th percentile.
+    if (adm != null && adm < 8) return (s75 && u >= s75) ? "target" : "reach";
+
     if (s25 && s75) {
       let band = u < s25 - 20 ? "reach" : u > s75 + 10 ? "safety" : "target";
       if (adm != null) {
-        if (adm < 25 && band === "safety") band = "target";
-        if (adm < 25 && band === "target") band = u > s75 + 40 ? "target" : "reach";
-        if (adm >= 75 && band === "target" && u >= s25) band = "safety";
+        if (adm < 20) {                                   // selective: temper upward
+          if (band === "safety") band = "target";
+          else if (band === "target" && u < s75) band = "reach";
+        } else if (adm >= 65 && band === "target" && u >= s25) {
+          band = "safety";                                // easy admit + in range
+        }
       }
       return band;
     }
-    if (adm != null) return adm >= 55 ? "safety" : adm >= 30 ? "target" : "reach";
+
+    // No SAT signal at all — fall back to acceptance rate only.
+    if (adm != null) return adm >= 55 ? "safety" : adm >= 25 ? "target" : "reach";
     return "open"; // open-admission / no selective process
   }
   const CH_LABEL = { safety: "Safety", target: "Target", reach: "Reach", open: "Open admission" };
