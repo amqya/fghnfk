@@ -1,176 +1,122 @@
-/* ===== UniMatch — client-side logic ===== */
+/* ===== UniMatch — client logic ===== */
 (() => {
   "use strict";
 
-  const LS = {
-    saved: "unimatch.saved",
-    passed: "unimatch.passed",
-    filters: "unimatch.filters",
-  };
+  const LS = { saved: "unimatch.saved", passed: "unimatch.passed", filters: "unimatch.filters", photo: "unimatch.photo." };
 
-  let ALL = [];               // all colleges
-  let matches = [];           // current filtered deck (excluding already-decided)
-  let idx = 0;                // pointer into matches
-  let lastAction = null;      // for undo: {college, verdict}
+  let ALL = [], matches = [], idx = 0, lastAction = null;
+  const state = { saved: loadSet(LS.saved), passed: loadSet(LS.passed) };
 
-  const state = {
-    saved: loadSet(LS.saved),
-    passed: loadSet(LS.passed),
-  };
-
-  // ---------- filter option definitions ----------
   const REGIONS = ["Northeast", "Midwest", "South", "West", "Territories"];
-  const DEGREES = [
-    ["4-year", "🎓 4-year"],
-    ["2-year", "🏫 2-year / community"],
-    ["Graduate", "📚 Grad-focused"],
-  ];
-  const CONTROLS = [
-    ["Public", "🏛️ Public"],
-    ["Private nonprofit", "🌿 Private nonprofit"],
-    ["For-profit", "💼 For-profit"],
-  ];
-  const SIZES = [
-    "Very small (<1k)", "Small (1k–3k)", "Medium (3k–10k)",
-    "Large (10k–20k)", "Very large (20k+)",
-  ];
-  const SETTINGS = [
-    ["City", "🏙️ City"], ["Suburb", "🏡 Suburb"],
-    ["Town", "🏘️ Town"], ["Rural", "🌾 Rural"],
-  ];
-  const SELECTIVITY = [
-    "Most selective", "Highly selective", "Selective",
-    "Less selective", "Test-optional / Open",
+  const DEGREES = [["4-year", "🎓 4-year"], ["2-year", "🏫 2-year / community"], ["Graduate", "📚 Grad-focused"]];
+  const CONTROLS = [["Public", "🏛️ Public"], ["Private nonprofit", "🌿 Private nonprofit"], ["For-profit", "💼 For-profit"]];
+  const SIZES = ["Very small (<1k)", "Small (1k–3k)", "Medium (3k–10k)", "Large (10k–20k)", "Very large (20k+)"];
+  const SETTINGS = [["City", "🏙️ City"], ["Suburb", "🏡 Suburb"], ["Town", "🏘️ Town"], ["Rural", "🌾 Rural"]];
+  const SELECTIVITY = ["Most selective", "Highly selective", "Selective", "Less selective", "Test-optional / Open"];
+  const VIBES = [
+    ["residential", "🏘️ Residential campus"],
+    ["highRetention", "😊 High satisfaction (90%+ return)"],
+    ["diverse", "🌍 Very diverse"],
+    ["outcomes", "📈 Strong grad outcomes"],
+    ["bigsports", "🏟️ Big-school energy (15k+)"],
+    ["intimate", "🤝 Small & close-knit (<3k)"],
   ];
   const MISSIONS = [
     ["hbcu", "HBCU"], ["hsi", "Hispanic-serving"], ["tribal", "Tribal college"],
-    ["womenOnly", "Women's college"], ["menOnly", "Men's college"],
-    ["religious", "Religiously affiliated"],
+    ["womenOnly", "Women's college"], ["menOnly", "Men's college"], ["religious", "Religiously affiliated"],
   ];
 
-  // Default filter selections
   const DEFAULTS = {
-    region: [], state: [], degree: ["4-year"],
-    control: ["Public", "Private nonprofit"],
-    sizeCategory: [], setting: [], selectivity: [], major: [], mission: [],
-    maxCost: 60000,
+    region: [], state: [], degree: ["4-year"], control: ["Public", "Private nonprofit"],
+    sizeCategory: [], setting: [], selectivity: [], field: [], vibe: [], mission: [],
+    maxCost: 60000, name: "", sort: "score",
   };
   let filters = loadFilters();
 
-  // ---------- boot ----------
-  fetch("data/colleges.json")
-    .then((r) => r.json())
-    .then((data) => {
-      ALL = data;
-      buildFilterUI();
-      wire();
-      updateMatchCount();
-      updateSavedPill();
-      show("filters");
-    })
-    .catch(() => {
-      document.getElementById("view-filters").innerHTML =
-        '<p style="color:#fff;text-align:center">Could not load college data. ' +
-        'Make sure you are serving this folder (e.g. <code>python3 -m http.server</code>).</p>';
-    });
+  fetch("data/colleges.json").then(r => r.json()).then(data => {
+    ALL = data;
+    buildFilterUI(); wire(); updateMatchCount(); updateSavedPill(); show("filters");
+  }).catch(() => {
+    document.getElementById("view-filters").innerHTML =
+      '<div class="panel" style="padding:24px;text-align:center">Could not load college data. Serve the folder over HTTP (e.g. <code>python3 -m http.server</code>) rather than opening the file directly.</div>';
+  });
 
-  // ---------- persistence helpers ----------
-  function loadSet(key) {
-    try { return new Set(JSON.parse(localStorage.getItem(key) || "[]")); }
-    catch { return new Set(); }
-  }
-  function saveSet(key, set) {
-    try { localStorage.setItem(key, JSON.stringify([...set])); } catch {}
-  }
-  function loadFilters() {
-    try {
-      const f = JSON.parse(localStorage.getItem(LS.filters));
-      return f ? Object.assign({}, DEFAULTS, f) : Object.assign({}, DEFAULTS);
-    } catch { return Object.assign({}, DEFAULTS); }
-  }
-  function saveFilters() {
-    try { localStorage.setItem(LS.filters, JSON.stringify(filters)); } catch {}
-  }
+  // ---------- persistence ----------
+  function loadSet(k) { try { return new Set(JSON.parse(localStorage.getItem(k) || "[]")); } catch { return new Set(); } }
+  function saveSet(k, s) { try { localStorage.setItem(k, JSON.stringify([...s])); } catch {} }
+  function loadFilters() { try { const f = JSON.parse(localStorage.getItem(LS.filters)); return f ? { ...DEFAULTS, ...f } : { ...DEFAULTS }; } catch { return { ...DEFAULTS }; } }
+  function saveFilters() { try { localStorage.setItem(LS.filters, JSON.stringify(filters)); } catch {} }
 
-  // ---------- build filter UI ----------
+  // ---------- filter UI ----------
   function chip(name, value, label) {
     const on = (filters[name] || []).includes(value);
     const el = document.createElement("label");
     el.className = "chip" + (on ? " on" : "");
-    el.innerHTML =
-      `<input type="checkbox" ${on ? "checked" : ""}><span>${label}</span>`;
-    el.querySelector("input").addEventListener("change", (e) => {
-      const arr = new Set(filters[name] || []);
-      if (e.target.checked) arr.add(value); else arr.delete(value);
-      filters[name] = [...arr];
+    el.innerHTML = `<input type="checkbox" ${on ? "checked" : ""}><span>${label}</span>`;
+    el.querySelector("input").addEventListener("change", e => {
+      const set = new Set(filters[name] || []);
+      e.target.checked ? set.add(value) : set.delete(value);
+      filters[name] = [...set];
       el.classList.toggle("on", e.target.checked);
-      afterFilterChange();
+      saveFilters(); updateMatchCount();
     });
     return el;
   }
-
   function fillChips(name, items) {
     const box = document.querySelector(`.chips[data-name="${name}"]`);
-    box.innerHTML = "";
-    items.forEach(([v, l]) => box.appendChild(chip(name, v, l)));
+    box.innerHTML = ""; items.forEach(([v, l]) => box.appendChild(chip(name, v, l)));
   }
 
   function buildFilterUI() {
-    fillChips("region", REGIONS.map((r) => [r, r]));
+    fillChips("region", REGIONS.map(r => [r, r]));
     fillChips("degree", DEGREES);
     fillChips("control", CONTROLS);
-    fillChips("sizeCategory", SIZES.map((s) => [s, s]));
+    fillChips("sizeCategory", SIZES.map(s => [s, s]));
     fillChips("setting", SETTINGS);
-    fillChips("selectivity", SELECTIVITY.map((s) => [s, s]));
+    fillChips("selectivity", SELECTIVITY.map(s => [s, s]));
+    fillChips("vibe", VIBES);
     fillChips("mission", MISSIONS);
+    fillChips("state", [...new Set(ALL.map(c => c.stateName))].sort().map(s => [s, s]));
+    fillChips("field", [...new Set(ALL.flatMap(c => c.fields))].sort().map(m => [m, m]));
 
-    // States (from data), searchable
-    const states = [...new Set(ALL.map((c) => c.stateName))].sort();
-    fillChips("state", states.map((s) => [s, s]));
-    filterChipList("stateSearch", "state");
-
-    // Majors (from data), searchable
-    const majors = [...new Set(ALL.flatMap((c) => c.majors))].sort();
-    fillChips("major", majors.map((m) => [m, m]));
-    filterChipList("majorSearch", "major");
-
-    // cost slider
-    const range = document.getElementById("costRange");
-    range.value = filters.maxCost;
-    updateCostLabel();
-    range.addEventListener("input", () => {
-      filters.maxCost = +range.value;
-      updateCostLabel();
-      afterFilterChange();
-    });
-  }
-
-  function updateCostLabel() {
-    const v = +document.getElementById("costRange").value;
-    document.getElementById("costLabel").textContent =
-      v >= 60000 ? "no limit" : "up to $" + v.toLocaleString() + "/yr";
-  }
-
-  function filterChipList(inputId, name) {
-    const input = document.getElementById(inputId);
-    const box = document.querySelector(`.chips[data-name="${name}"]`);
-    input.addEventListener("input", () => {
-      const q = input.value.trim().toLowerCase();
-      [...box.children].forEach((ch) => {
-        const t = ch.textContent.toLowerCase();
-        ch.style.display = t.includes(q) ? "" : "none";
+    document.querySelectorAll(".mini-search").forEach(inp => {
+      const box = document.querySelector(`.chips[data-name="${inp.dataset.for}"]`);
+      inp.addEventListener("input", () => {
+        const q = inp.value.trim().toLowerCase();
+        [...box.children].forEach(ch => ch.style.display = ch.textContent.toLowerCase().includes(q) ? "" : "none");
       });
     });
+
+    const range = document.getElementById("costRange");
+    range.value = filters.maxCost; updateCostLabel();
+    range.addEventListener("input", () => { filters.maxCost = +range.value; updateCostLabel(); saveFilters(); updateMatchCount(); });
+
+    const nameS = document.getElementById("nameSearch");
+    nameS.value = filters.name || "";
+    nameS.addEventListener("input", () => { filters.name = nameS.value; saveFilters(); updateMatchCount(); });
+
+    const sortS = document.getElementById("sortBy");
+    sortS.value = filters.sort || "score";
+    sortS.addEventListener("change", () => { filters.sort = sortS.value; saveFilters(); });
+  }
+  function updateCostLabel() {
+    const v = +document.getElementById("costRange").value;
+    document.getElementById("costLabel").textContent = v >= 60000 ? "no limit" : "up to $" + v.toLocaleString() + "/yr";
   }
 
-  function afterFilterChange() {
-    saveFilters();
-    updateMatchCount();
-  }
+  // ---------- vibe helpers ----------
+  const residentialScore = c => {
+    if (c.partTimePct == null && c.adultPct == null) return null;
+    const pt = c.partTimePct ?? 0, ad = c.adultPct ?? 0;
+    return Math.max(0, Math.round(100 - pt * 0.7 - ad * 0.8));
+  };
+  const academicScore = c => c.satAvg != null ? Math.max(0, Math.min(100, Math.round((c.satAvg - 800) / 6))) : null;
+  const scaleScore = c => c.size != null ? Math.min(100, Math.round(Math.log10(c.size + 1) / Math.log10(60000) * 100)) : null;
 
   // ---------- matching ----------
-  function passesFilters(c) {
+  function passes(c) {
     const f = filters;
+    if (f.name && !c.name.toLowerCase().includes(f.name.trim().toLowerCase())) return false;
     if (f.region.length && !f.region.includes(c.region)) return false;
     if (f.state.length && !f.state.includes(c.stateName)) return false;
     if (f.degree.length && !f.degree.includes(c.degree)) return false;
@@ -178,182 +124,216 @@
     if (f.sizeCategory.length && !f.sizeCategory.includes(c.sizeCategory)) return false;
     if (f.setting.length && !f.setting.includes(c.setting)) return false;
     if (f.selectivity.length && !f.selectivity.includes(c.selectivity)) return false;
-    if (f.major.length && !c.majors.some((m) => f.major.includes(m))) return false;
-    if (f.mission.length && !f.mission.some((m) => c.flags[m])) return false;
-    // cost: only exclude when a known price exceeds the cap (unknown still shows)
+    if (f.field.length && !c.fields.some(m => f.field.includes(m))) return false;
+    if (f.mission.length && !f.mission.some(m => c.flags[m])) return false;
     if (f.maxCost < 60000 && c.netPrice != null && c.netPrice > f.maxCost) return false;
+    for (const v of f.vibe) {
+      if (v === "residential" && !((residentialScore(c) ?? 0) >= 70)) return false;
+      if (v === "highRetention" && !(c.retention != null && c.retention >= 90)) return false;
+      if (v === "diverse" && !(c.diversity != null && c.diversity >= 80)) return false;
+      if (v === "outcomes" && !(c.gradRate != null && c.gradRate >= 65)) return false;
+      if (v === "bigsports" && !(c.size != null && c.size >= 15000)) return false;
+      if (v === "intimate" && !(c.size != null && c.size < 3000)) return false;
+    }
     return true;
   }
 
-  function computeMatches(includeDecided) {
-    return ALL.filter((c) => {
-      if (!passesFilters(c)) return false;
-      if (!includeDecided && (state.saved.has(c.id) || state.passed.has(c.id))) return false;
-      return true;
-    });
+  function sortMatches(list) {
+    const s = filters.sort;
+    const by = {
+      name: (a, b) => a.name.localeCompare(b.name),
+      selective: (a, b) => (b.satAvg || 0) - (a.satAvg || 0),
+      retention: (a, b) => (b.retention || 0) - (a.retention || 0),
+      grad: (a, b) => (b.gradRate || 0) - (a.gradRate || 0),
+      size_desc: (a, b) => (b.size || 0) - (a.size || 0),
+      size_asc: (a, b) => (a.size || 1e9) - (b.size || 1e9),
+      cost_asc: (a, b) => (a.netPrice ?? 1e9) - (b.netPrice ?? 1e9),
+      score: (a, b) => b._score - a._score,
+    }[s] || ((a, b) => b._score - a._score);
+    return list.sort(by);
   }
 
   function updateMatchCount() {
-    const n = ALL.filter(passesFilters).length;
-    document.getElementById("matchCount").textContent = n.toLocaleString();
+    document.getElementById("matchCount").textContent = ALL.filter(passes).length.toLocaleString();
   }
 
-  // ---------- rendering: summary + card ----------
-  const fmt = (n) => n == null ? null : n.toLocaleString();
-
-  function bannerGradient(c) {
-    // deterministic hue from name so each school has a stable color
-    let h = 0;
-    for (let i = 0; i < c.name.length; i++) h = (h * 31 + c.name.charCodeAt(i)) % 360;
-    return `linear-gradient(135deg, hsl(${h} 70% 45%), hsl(${(h + 40) % 360} 75% 38%))`;
+  // ---------- photos (Wikipedia, client-side, cached) ----------
+  function setPhoto(c, imgEl, fallbackEl) {
+    const cached = localStorage.getItem(LS.photo + c.id);
+    if (cached === "none") return; // keep fallback
+    if (cached) { showImg(imgEl, fallbackEl, cached); return; }
+    const q = encodeURIComponent(c.name + " " + c.stateName);
+    const url = `https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&prop=pageimages&piprop=thumbnail&pithumbsize=900&generator=search&gsrsearch=${q}&gsrlimit=1`;
+    fetch(url).then(r => r.json()).then(d => {
+      const pages = d && d.query && d.query.pages;
+      let src = null;
+      if (pages) for (const k in pages) if (pages[k].thumbnail) src = pages[k].thumbnail.source;
+      try { localStorage.setItem(LS.photo + c.id, src || "none"); } catch {}
+      if (src) showImg(imgEl, fallbackEl, src);
+    }).catch(() => {});
   }
+  function showImg(imgEl, fallbackEl, src) {
+    imgEl.onload = () => { imgEl.style.display = "block"; if (fallbackEl) fallbackEl.style.display = "none"; };
+    imgEl.src = src;
+  }
+  function hueFor(name) { let h = 0; for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360; return h; }
+
+  // ---------- summary & card ----------
+  const fmt = n => n == null ? null : n.toLocaleString();
+  const joinL = a => a.length <= 1 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1];
 
   function summarize(c) {
-    const sizeWord = c.size == null ? "" :
-      c.size >= 20000 ? "large " : c.size < 3000 ? "small " : "mid-sized ";
-    const type = c.control === "Public" ? "public" :
-      c.control === "For-profit" ? "for-profit" : "private";
-    const deg = c.degree === "2-year" ? "2-year college" :
-      c.degree === "Graduate" ? "university" : "university";
-    let s = `${c.name} is a ${sizeWord}${type} ${deg} in ${c.city}, ${c.stateName}.`;
+    const sizeW = c.size == null ? "" : c.size >= 20000 ? "large " : c.size < 3000 ? "small " : "mid-sized ";
+    const type = c.control === "Public" ? "public" : c.control === "For-profit" ? "for-profit" : "private";
+    const deg = c.degree === "2-year" ? "2-year college" : "university";
+    let s = `${c.name} is a ${sizeW}${type} ${deg} in ${c.city}, ${c.stateName}.`;
     const bits = [];
     if (c.size != null) bits.push(`about ${fmt(c.size)} undergraduates`);
-    if (c.netPrice != null) bits.push(`average net cost around $${fmt(c.netPrice)}/yr`);
-    if (c.gradRate != null) bits.push(`${c.gradRate}% graduate on time`);
-    if (bits.length) s += " It has " + joinList(bits) + ".";
-    if (c.majors.length) s += " Students most often study " + joinList(c.majors.slice(0, 3)) + ".";
+    if (c.netPrice != null) bits.push(`an average net cost near $${fmt(c.netPrice)}/yr`);
+    if (c.retention != null) bits.push(`${c.retention}% of freshmen return for year two`);
+    if (bits.length) s += " It has " + joinL(bits) + ".";
+    if (c.majors.length) s += " Students most often study " + joinL(c.majors.slice(0, 3)) + ".";
     return s;
   }
-
-  function joinList(a) {
-    if (a.length <= 1) return a.join("");
-    return a.slice(0, -1).join(", ") + " and " + a[a.length - 1];
-  }
-
   function missionBadges(c) {
-    const out = [];
-    if (c.flags.hbcu) out.push("HBCU");
-    if (c.flags.hsi) out.push("Hispanic-serving");
-    if (c.flags.tribal) out.push("Tribal college");
-    if (c.flags.womenOnly) out.push("Women's college");
-    if (c.flags.menOnly) out.push("Men's college");
-    if (c.flags.religious) out.push("Religiously affiliated");
-    return out;
+    const m = [];
+    if (c.flags.hbcu) m.push("HBCU"); if (c.flags.hsi) m.push("Hispanic-serving");
+    if (c.flags.tribal) m.push("Tribal college"); if (c.flags.womenOnly) m.push("Women's college");
+    if (c.flags.menOnly) m.push("Men's college"); if (c.flags.religious) m.push("Religiously affiliated");
+    return m;
+  }
+  function metricRow(label, val, cap, cls) {
+    if (val == null) return "";
+    return `<div class="metric"><div class="lab"><span>${label}</span><span class="val">${val}${cls === "raw" ? "" : "%"}</span></div>
+      <div class="bar ${cls || ""}"><span style="width:${Math.max(3, Math.min(100, val))}%"></span></div>
+      ${cap ? `<div class="cap">${cap}</div>` : ""}</div>`;
   }
 
-  function cardEl(c) {
+  function cardEl(c, isTop) {
     const el = document.createElement("article");
-    el.className = "card";
-
-    const stats = [];
-    if (c.size != null) stats.push(["Undergrads", fmt(c.size)]);
-    if (c.netPrice != null) stats.push(["Avg net price", "$" + fmt(c.netPrice) + "/yr"]);
-    if (c.gradRate != null) stats.push(["Grad rate", c.gradRate + "%"]);
-    if (c.satAvg != null) stats.push(["Avg SAT", fmt(c.satAvg)]);
-    if (c.earnings != null) stats.push(["Median pay (10yr)", "$" + fmt(c.earnings)]);
-    stats.push(["Selectivity", c.selectivity.replace(" / ", "/")]);
+    el.className = "card" + (isTop ? " top" : "");
+    const qs = [];
+    if (c.size != null) qs.push(["Undergrads", fmt(c.size)]);
+    if (c.netPrice != null) qs.push(["Avg net price", "$" + fmt(c.netPrice) + "/yr"]);
+    if (c.gradRate != null) qs.push(["Grad rate", c.gradRate + "%"]);
+    qs.push(["Selectivity", c.selectivity.replace(" / ", "/")]);
 
     const badges = [
-      `<span class="badge">${c.control}</span>`,
-      `<span class="badge">${c.degree}</span>`,
+      `<span class="badge">${c.control}</span>`, `<span class="badge">${c.degree}</span>`,
       c.setting ? `<span class="badge">${c.setting}</span>` : "",
-      c.sizeCategory ? `<span class="badge accent">${c.sizeCategory}</span>` : "",
-      ...missionBadges(c).map((m) => `<span class="badge mission">${m}</span>`),
+      c.sizeCategory ? `<span class="badge">${c.sizeCategory}</span>` : "",
+      ...missionBadges(c).map(m => `<span class="badge mission">${m}</span>`),
+    ].join("");
+
+    // feel metrics (main view)
+    const feel = [
+      metricRow("Academic intensity", academicScore(c), c.satAvg ? `Avg SAT ~${fmt(c.satAvg)}` : "", "warm"),
+      metricRow("Student satisfaction", c.retention, "Freshmen who return for sophomore year", "good"),
+      metricRow("Campus scale", scaleScore(c), c.size ? `${fmt(c.size)} undergrads` : "", ""),
+      metricRow("Diversity", c.diversity, "Racial/ethnic mix of the student body", ""),
+    ].join("");
+
+    const initials = c.name.replace(/^(The|University|College)\s+/i, "").split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+    const hue = hueFor(c.name);
+
+    // details
+    const divRows = (c.diversityBreakdown || []).map(b =>
+      `<div class="diversity-row"><span class="g">${b.g}</span><span class="bar"><span style="width:${b.p}%"></span></span><span class="p">${b.p}%</span></div>`).join("");
+    const kv = [];
+    if (c.earnings != null) kv.push(["Median pay (10 yrs after entry)", "$" + fmt(c.earnings)]);
+    if (c.retention != null) kv.push(["Freshman retention", c.retention + "%"]);
+    if (c.gradRate != null) kv.push(["Graduation rate", c.gradRate + "%"]);
+    if (c.pell != null) kv.push(["On Pell Grant (lower-income)", c.pell + "%"]);
+    if (c.adultPct != null) kv.push(["Students over 25", c.adultPct + "%"]);
+    if (c.partTimePct != null) kv.push(["Part-time students", c.partTimePct + "%"]);
+    const resScore = residentialScore(c);
+
+    const nicheSlug = c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const links = [
+      c.url ? `<a href="${encodeURI(c.url)}" target="_blank" rel="noopener">Official site ↗</a>` : "",
+      `<a href="https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(c.name)}" target="_blank" rel="noopener">Wikipedia ↗</a>`,
+      `<a href="https://www.niche.com/colleges/search/best-colleges/?q=${encodeURIComponent(c.name)}" target="_blank" rel="noopener">Student reviews (Niche) ↗</a>`,
+      `<a href="https://www.google.com/maps/search/${encodeURIComponent(c.name + " " + c.city + " " + c.state)}" target="_blank" rel="noopener">Map ↗</a>`,
     ].join("");
 
     el.innerHTML = `
-      <div class="stamp like">Save</div>
-      <div class="stamp nope">Pass</div>
-      <div class="banner" style="background:${bannerGradient(c)}">
-        <h2>${escapeHtml(c.name)}</h2>
-        <div class="loc">📍 ${escapeHtml(c.city)}, ${c.state} · ${c.region}</div>
+      <div class="stamp like">Save</div><div class="stamp nope">Pass</div>
+      <div class="drag-handle" style="background:linear-gradient(135deg,hsl(${hue} 55% 52%),hsl(${(hue + 45) % 360} 60% 42%))">
+        <div class="grip"></div>
+        <div class="photo-fallback">${initials || "🎓"}</div>
+        <img class="photo" alt="" style="display:none" />
+        <div class="photo-grad"></div>
+        <div class="photo-title"><h2>${esc(c.name)}</h2><div class="loc">📍 ${esc(c.city)}, ${c.state} · ${c.region}</div></div>
       </div>
       <div class="body">
         <div class="badges">${badges}</div>
-        <p class="summary">${escapeHtml(summarize(c))}</p>
-        <div class="stats">
-          ${stats.map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")}
-        </div>
-        <div class="readmore"><button type="button">Read more ▾</button></div>
+        <div class="quickstats">${qs.map(([k, v]) => `<div class="qs"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")}</div>
+        <p class="summary">${esc(summarize(c))}</p>
+        <div class="metrics">${feel}</div>
+        <button type="button" class="readmore-btn">Read more ▾</button>
         <div class="details hidden">
-          <h3>Popular fields of study</h3>
-          <div class="majorlist">${c.majors.map((m) => `<span>${escapeHtml(m)}</span>`).join("") || "<span>Not reported</span>"}</div>
-          <h3>At a glance</h3>
-          <div class="majorlist">
-            <span>${c.stateName}</span>
-            <span>${c.control}</span>
-            <span>${c.degree}</span>
-            ${c.setting ? `<span>${c.setting} setting</span>` : ""}
+          <h3>Campus feel</h3>
+          <div class="metrics">
+            ${metricRow("Residential vibe", resScore, resScore != null ? "Higher = more full-time, live-on-campus students" : "", "raw2")}
+            ${metricRow("Affordability", c.netPrice != null ? Math.max(0, Math.round(100 - c.netPrice / 500)) : null, c.netPrice != null ? `$${fmt(c.netPrice)}/yr average net price` : "", "good")}
           </div>
-          ${c.url ? `<a class="weblink" href="${encodeURI(c.url)}" target="_blank" rel="noopener">Visit official site ↗</a>` : ""}
+          <p class="note">Social scene, Greek life, party culture and overall happiness are rated by
+            students, not in the federal data behind this app — the “Student reviews (Niche)” link below
+            has those. The bars here are built from official stats: retention (how many students stay),
+            selectivity (academic intensity), size, and diversity.</p>
+          ${kv.length ? `<h3>By the numbers</h3><div class="kv">${kv.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join("")}</div>` : ""}
+          ${divRows ? `<h3>Student body</h3>${divRows}` : ""}
+          <h3>Fields offered here</h3>
+          <div class="chiplist">${c.fields.map(m => `<span>${esc(m)}</span>`).join("") || "<span>Not reported</span>"}</div>
+          <h3>Explore &amp; verify</h3>
+          <div class="links">${links}</div>
         </div>
       </div>`;
 
-    const rm = el.querySelector(".readmore button");
-    const details = el.querySelector(".details");
-    rm.addEventListener("click", (e) => {
+    const rm = el.querySelector(".readmore-btn"), det = el.querySelector(".details");
+    rm.addEventListener("click", e => {
       e.stopPropagation();
-      const hidden = details.classList.toggle("hidden");
+      const hidden = det.classList.toggle("hidden");
       rm.textContent = hidden ? "Read more ▾" : "Show less ▴";
+      if (!hidden) det.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
 
-    enableDrag(el, c);
+    if (isTop) enableDrag(el);
+    setPhoto(c, el.querySelector(".photo"), el.querySelector(".photo-fallback"));
     return el;
   }
+  function esc(s) { return String(s).replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m])); }
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (m) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
-  }
-
-  // ---------- deck flow ----------
+  // ---------- deck ----------
   function startDeck() {
-    matches = computeMatches(false);
-    idx = 0;
-    lastAction = null;
+    matches = sortMatches(ALL.filter(c => passes(c) && !state.saved.has(c.id) && !state.passed.has(c.id)));
+    idx = 0; lastAction = null;
     document.getElementById("undoBtn").disabled = true;
-    renderDeck();
+    render();
   }
-
-  function renderDeck() {
-    const deck = document.getElementById("deck");
-    const empty = document.getElementById("deckEmpty");
-    const controls = document.getElementById("deckControls");
+  function render() {
+    const deck = document.getElementById("deck"), empty = document.getElementById("deckEmpty"), ctrl = document.getElementById("deckControls");
     deck.innerHTML = "";
-
     document.getElementById("deckTotal").textContent = matches.length;
     document.getElementById("deckPos").textContent = Math.min(idx + 1, matches.length);
-
-    const remaining = matches.length - idx;
-    if (remaining <= 0) {
-      deck.hidden = true; controls.style.visibility = "hidden";
-      empty.hidden = false;
-      const anyPassed = state.passed.size > 0;
-      document.getElementById("reviewPassed").hidden = !anyPassed;
-      document.getElementById("emptyMsg").textContent =
-        matches.length === 0
-          ? "No schools matched your filters. Try widening them."
-          : `You reviewed ${matches.length} matching ${matches.length === 1 ? "school" : "schools"}. ` +
-            `${state.saved.size} saved.`;
+    if (idx >= matches.length) {
+      deck.hidden = true; ctrl.style.visibility = "hidden"; empty.hidden = false;
+      document.getElementById("reviewPassed").hidden = state.passed.size === 0;
+      document.getElementById("emptyMsg").textContent = matches.length === 0
+        ? "No schools matched your filters. Try widening them."
+        : `You reviewed ${matches.length} matching ${matches.length === 1 ? "school" : "schools"}. ${state.saved.size} saved to your shortlist.`;
       return;
     }
-    deck.hidden = false; controls.style.visibility = "visible"; empty.hidden = true;
-
-    // render up to 3 stacked cards (top is interactive)
+    deck.hidden = false; ctrl.style.visibility = "visible"; empty.hidden = true;
     const upto = Math.min(idx + 3, matches.length);
     for (let i = upto - 1; i >= idx; i--) {
-      const el = cardEl(matches[i]);
-      const depth = i - idx;
-      el.style.transform = `translateY(${depth * 10}px) scale(${1 - depth * 0.04})`;
-      el.style.zIndex = String(100 - depth);
-      el.dataset.depth = depth;
+      const depth = i - idx, el = cardEl(matches[i], depth === 0);
+      el.style.transform = `translateY(${depth * 9}px) scale(${1 - depth * 0.035})`;
+      el.style.zIndex = String(100 - depth); el.dataset.depth = depth;
       deck.appendChild(el);
     }
   }
-
-  function topCard() {
-    return document.querySelector('.card[data-depth="0"]');
-  }
+  const topCard = () => document.querySelector('.card[data-depth="0"]');
 
   function decide(verdict) {
     if (idx >= matches.length) return;
@@ -361,199 +341,144 @@
     if (verdict === "save") { state.saved.add(c.id); state.passed.delete(c.id); }
     else { state.passed.add(c.id); state.saved.delete(c.id); }
     saveSet(LS.saved, state.saved); saveSet(LS.passed, state.passed);
-    lastAction = { id: c.id, verdict };
-    document.getElementById("undoBtn").disabled = false;
-    updateSavedPill();
-    idx++;
-    renderDeck();
+    lastAction = { id: c.id }; document.getElementById("undoBtn").disabled = false;
+    updateSavedPill(); idx++; render();
   }
-
   function flyOut(dir) {
     const card = topCard();
-    if (!card) { decide(dir > 0 ? "save" : "pass"); return; }
-    card.style.transition = "transform .35s ease, opacity .35s ease";
-    card.style.transform = `translate(${dir * 600}px, -40px) rotate(${dir * 22}deg)`;
+    if (!card) return decide(dir > 0 ? "save" : "pass");
+    card.style.transition = "transform .32s ease, opacity .32s ease";
+    card.style.transform = `translate(${dir * 620}px, -30px) rotate(${dir * 20}deg)`;
     card.style.opacity = "0";
-    const stamp = card.querySelector(dir > 0 ? ".stamp.like" : ".stamp.nope");
-    if (stamp) stamp.style.opacity = "1";
-    setTimeout(() => decide(dir > 0 ? "save" : "pass"), 220);
+    const st = card.querySelector(dir > 0 ? ".stamp.like" : ".stamp.nope"); if (st) st.style.opacity = "1";
+    setTimeout(() => decide(dir > 0 ? "save" : "pass"), 200);
   }
-
   function undo() {
     if (!lastAction) return;
-    state.saved.delete(lastAction.id);
-    state.passed.delete(lastAction.id);
+    state.saved.delete(lastAction.id); state.passed.delete(lastAction.id);
     saveSet(LS.saved, state.saved); saveSet(LS.passed, state.passed);
-    idx = Math.max(0, idx - 1);
-    lastAction = null;
-    document.getElementById("undoBtn").disabled = true;
-    updateSavedPill();
-    renderDeck();
-    toast("Undone");
+    idx = Math.max(0, idx - 1); lastAction = null;
+    document.getElementById("undoBtn").disabled = true; updateSavedPill(); render(); toast("Undone");
   }
 
-  // ---------- drag / swipe ----------
-  function enableDrag(card, c) {
-    let sx = 0, sy = 0, dx = 0, dy = 0, dragging = false;
-    const like = card.querySelector(".stamp.like");
-    const nope = card.querySelector(".stamp.nope");
+  // ---------- drag with horizontal-intent lock (so scrolling text doesn't move the card) ----------
+  function enableDrag(card) {
+    let sx = 0, sy = 0, dx = 0, axis = null, dragging = false;
+    const like = card.querySelector(".stamp.like"), nope = card.querySelector(".stamp.nope");
+    const handle = card.querySelector(".drag-handle");
 
-    const down = (e) => {
-      if (card.dataset.depth !== "0") return;
-      if (e.target.closest(".readmore, .weblink, .body")) {
-        // allow scrolling / link taps inside the body without starting a drag,
-        // unless the drag begins on the banner
-        if (!e.target.closest(".banner")) { /* still allow drag from body */ }
+    const start = e => {
+      dragging = true; axis = null; dx = 0;
+      const p = pt(e); sx = p.x; sy = p.y; card.style.transition = "none";
+    };
+    const move = e => {
+      if (!dragging) return;
+      const p = pt(e), mx = p.x - sx, my = p.y - sy;
+      if (!axis) {
+        if (Math.abs(mx) > 8 && Math.abs(mx) > Math.abs(my)) axis = "x";
+        else if (Math.abs(my) > 8) { axis = "y"; dragging = false; return; } // let it scroll
+        else return;
       }
-      dragging = true;
-      const p = point(e);
-      sx = p.x; sy = p.y;
-      card.style.transition = "none";
-      if (e.pointerId != null) card.setPointerCapture?.(e.pointerId);
-    };
-    const move = (e) => {
-      if (!dragging) return;
-      const p = point(e);
-      dx = p.x - sx; dy = p.y - sy;
-      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
-      card.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 18}deg)`;
+      if (axis !== "x") return;
+      if (e.cancelable) e.preventDefault();
+      dx = mx;
+      card.style.transform = `translate(${dx}px, ${my * 0.25}px) rotate(${dx / 20}deg)`;
       const r = Math.min(Math.abs(dx) / 120, 1);
-      if (dx > 0) { like.style.opacity = r; nope.style.opacity = 0; }
-      else { nope.style.opacity = r; like.style.opacity = 0; }
+      if (dx > 0) { like.style.opacity = r; nope.style.opacity = 0; } else { nope.style.opacity = r; like.style.opacity = 0; }
     };
-    const up = () => {
-      if (!dragging) return;
+    const end = () => {
+      if (!dragging && axis !== "x") { reset(); return; }
       dragging = false;
       card.style.transition = "transform .3s ease";
-      if (dx > 110) return flyOut(1);
-      if (dx < -110) return flyOut(-1);
-      card.style.transform = "translateY(0) scale(1)";
-      like.style.opacity = 0; nope.style.opacity = 0;
-      dx = dy = 0;
+      if (axis === "x" && dx > 110) return flyOut(1);
+      if (axis === "x" && dx < -110) return flyOut(-1);
+      reset();
     };
+    const reset = () => { card.style.transform = "translateY(0) scale(1)"; like.style.opacity = 0; nope.style.opacity = 0; dx = 0; axis = null; };
 
-    card.addEventListener("pointerdown", down);
-    card.addEventListener("pointermove", move);
-    card.addEventListener("pointerup", up);
-    card.addEventListener("pointercancel", up);
+    // Drag can start on the photo handle (nice big grab area) OR anywhere,
+    // but the intent lock means vertical gestures scroll the body instead.
+    card.addEventListener("pointerdown", start);
+    card.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", end);
+    card.addEventListener("pointercancel", end);
+    handle.addEventListener("dragstart", e => e.preventDefault());
   }
-  function point(e) {
-    if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    return { x: e.clientX, y: e.clientY };
-  }
+  const pt = e => e.touches && e.touches[0] ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
 
-  // ---------- my list ----------
+  // ---------- shortlist ----------
   function renderList() {
-    const wrap = document.getElementById("savedList");
-    const empty = document.getElementById("savedEmpty");
-    const saved = ALL.filter((c) => state.saved.has(c.id));
-    document.getElementById("listSummary").textContent =
-      `${saved.length} saved · ${state.passed.size} passed`;
+    const wrap = document.getElementById("savedList"), empty = document.getElementById("savedEmpty");
+    const saved = ALL.filter(c => state.saved.has(c.id));
+    document.getElementById("listSummary").textContent = `${saved.length} saved · ${state.passed.size} passed`;
     empty.style.display = saved.length ? "none" : "";
     wrap.innerHTML = "";
-    saved.forEach((c) => {
+    saved.forEach(c => {
       const el = document.createElement("div");
       el.className = "saved-card";
       el.innerHTML = `
-        <h3>${escapeHtml(c.name)}</h3>
-        <div class="loc">📍 ${escapeHtml(c.city)}, ${c.state} · ${c.control} · ${c.degree}</div>
-        <div class="row">
-          ${c.netPrice != null ? `<span class="badge accent">$${fmt(c.netPrice)}/yr</span>` : ""}
-          ${c.gradRate != null ? `<span class="badge">${c.gradRate}% grad</span>` : ""}
-          ${c.size != null ? `<span class="badge">${fmt(c.size)} students</span>` : ""}
-        </div>
-        <div class="foot">
-          ${c.url ? `<a class="weblink" href="${encodeURI(c.url)}" target="_blank" rel="noopener">Official site ↗</a>` : "<span></span>"}
-          <button class="remove" data-id="${c.id}">Remove</button>
+        <div class="thumb" style="background:linear-gradient(135deg,hsl(${hueFor(c.name)} 55% 52%),hsl(${(hueFor(c.name) + 45) % 360} 60% 42%))"><img alt="" style="display:none"></div>
+        <div class="sc-body">
+          <h3>${esc(c.name)}</h3>
+          <div class="loc">📍 ${esc(c.city)}, ${c.state} · ${c.control} · ${c.degree}</div>
+          <div class="row">
+            ${c.netPrice != null ? `<span class="badge">$${fmt(c.netPrice)}/yr</span>` : ""}
+            ${c.gradRate != null ? `<span class="badge">${c.gradRate}% grad</span>` : ""}
+            ${c.retention != null ? `<span class="badge">${c.retention}% return</span>` : ""}
+          </div>
+          <div class="foot">
+            ${c.url ? `<a class="weblink" href="${encodeURI(c.url)}" target="_blank" rel="noopener">Official site ↗</a>` : "<span></span>"}
+            <button class="remove" data-id="${c.id}">Remove</button>
+          </div>
         </div>`;
       el.querySelector(".remove").addEventListener("click", () => {
-        state.saved.delete(c.id); saveSet(LS.saved, state.saved);
-        updateSavedPill(); renderList();
+        state.saved.delete(c.id); saveSet(LS.saved, state.saved); updateSavedPill(); renderList();
       });
+      setPhoto(c, el.querySelector("img"), null);
       wrap.appendChild(el);
     });
   }
-
   function copyList() {
-    const saved = ALL.filter((c) => state.saved.has(c.id));
+    const saved = ALL.filter(c => state.saved.has(c.id));
     if (!saved.length) return toast("Nothing to copy yet");
-    const text = saved.map((c, i) =>
-      `${i + 1}. ${c.name} — ${c.city}, ${c.state}${c.url ? " (" + c.url + ")" : ""}`
-    ).join("\n");
-    navigator.clipboard?.writeText("My college shortlist:\n" + text)
-      .then(() => toast("Shortlist copied to clipboard"))
-      .catch(() => toast("Copy failed"));
+    const text = "My college shortlist:\n" + saved.map((c, i) => `${i + 1}. ${c.name} — ${c.city}, ${c.state}${c.url ? " (" + c.url + ")" : ""}`).join("\n");
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast("Shortlist copied")).catch(() => toast("Copy not supported here"));
   }
 
-  // ---------- nav & wiring ----------
+  // ---------- nav ----------
   function show(view) {
-    ["filters", "deck", "list"].forEach((v) => {
-      document.getElementById("view-" + v).hidden = v !== view;
-    });
-    document.querySelectorAll(".nav-btn").forEach((b) =>
-      b.classList.toggle("active", b.dataset.go === view));
+    ["filters", "deck", "list"].forEach(v => document.getElementById("view-" + v).hidden = v !== view);
+    document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.go === view));
     if (view === "deck") startDeck();
     if (view === "list") renderList();
     window.scrollTo(0, 0);
   }
-
-  function updateSavedPill() {
-    document.getElementById("savedPill").textContent = state.saved.size;
-  }
-
-  let toastTimer;
-  function toast(msg) {
-    const t = document.getElementById("toast");
-    t.textContent = msg; t.hidden = false;
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => (t.hidden = true), 1800);
-  }
+  function updateSavedPill() { document.getElementById("savedPill").textContent = state.saved.size; }
+  let tT; function toast(m) { const t = document.getElementById("toast"); t.textContent = m; t.hidden = false; clearTimeout(tT); tT = setTimeout(() => t.hidden = true, 1800); }
 
   function wire() {
-    document.querySelectorAll("[data-go]").forEach((b) =>
-      b.addEventListener("click", () => show(b.dataset.go)));
+    document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => show(b.dataset.go)));
     document.getElementById("brandHome").addEventListener("click", () => show("filters"));
-
-    document.getElementById("filterForm").addEventListener("submit", (e) => {
-      e.preventDefault();
-      show("deck");
-    });
+    document.getElementById("filterForm").addEventListener("submit", e => { e.preventDefault(); show("deck"); });
     document.getElementById("resetBtn").addEventListener("click", () => {
-      filters = Object.assign({}, DEFAULTS, { degree: ["4-year"], control: ["Public", "Private nonprofit"] });
-      saveFilters();
-      buildFilterUI();
-      updateMatchCount();
-      toast("Filters reset");
+      filters = { ...DEFAULTS }; saveFilters(); buildFilterUI(); updateMatchCount(); toast("Filters reset");
     });
-
     document.getElementById("btnSave").addEventListener("click", () => flyOut(1));
     document.getElementById("btnPass").addEventListener("click", () => flyOut(-1));
-    document.getElementById("btnInfo").addEventListener("click", () => {
-      const card = topCard();
-      if (card) card.querySelector(".readmore button").click();
-    });
+    document.getElementById("btnInfo").addEventListener("click", () => { const c = topCard(); if (c) c.querySelector(".readmore-btn").click(); });
     document.getElementById("undoBtn").addEventListener("click", undo);
-    document.getElementById("reviewPassed").addEventListener("click", () => {
-      state.passed.clear(); saveSet(LS.passed, state.passed);
-      startDeck(); toast("Passed schools are back in the deck");
-    });
-
+    document.getElementById("reviewPassed").addEventListener("click", () => { state.passed.clear(); saveSet(LS.passed, state.passed); startDeck(); toast("Passed schools are back"); });
     document.getElementById("copyList").addEventListener("click", copyList);
     document.getElementById("clearSaved").addEventListener("click", () => {
-      if (!state.saved.size) return;
-      if (confirm("Clear your entire saved list?")) {
-        state.saved.clear(); saveSet(LS.saved, state.saved);
-        updateSavedPill(); renderList(); toast("List cleared");
-      }
+      if (state.saved.size && confirm("Clear your entire shortlist?")) { state.saved.clear(); saveSet(LS.saved, state.saved); updateSavedPill(); renderList(); toast("Shortlist cleared"); }
     });
-
-    // keyboard shortcuts on deck
-    document.addEventListener("keydown", (e) => {
+    document.addEventListener("keydown", e => {
       if (document.getElementById("view-deck").hidden) return;
+      if (e.target.matches("input, select, textarea")) return;
       if (e.key === "ArrowLeft") flyOut(-1);
       else if (e.key === "ArrowRight") flyOut(1);
       else if (e.key === "ArrowUp" || e.key === "i") document.getElementById("btnInfo").click();
-      else if (e.key === "z" && (e.ctrlKey || e.metaKey)) undo();
+      else if (e.key.toLowerCase() === "z" && (e.ctrlKey || e.metaKey)) undo();
     });
   }
 })();

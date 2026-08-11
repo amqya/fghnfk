@@ -3,21 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>UniMatch — Swipe your way to the right college</title>
-  <meta name="description" content="Filter, then swipe through every U.S. college to build your shortlist." />
+  <title>UniMatch — find your college by swiping</title>
+  <meta name="description" content="Filter, then swipe through every U.S. college — with photos, campus-vibe metrics, and a shortlist you build as you go." />
   <link rel="stylesheet" href="styles.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand" id="brandHome">
-      <span class="logo">🎓</span>
-      <span class="brand-name">UniMatch</span>
+      <span class="logo">🎓</span><span class="brand-name">UniMatch</span>
     </div>
     <nav class="nav">
       <button class="nav-btn" data-go="filters">Filters</button>
       <button class="nav-btn" data-go="deck">Swipe</button>
-      <button class="nav-btn" data-go="list">My List <span class="pill" id="savedPill">0</span></button>
+      <button class="nav-btn" data-go="list">Shortlist <span class="pill" id="savedPill">0</span></button>
     </nav>
   </header>
 
@@ -26,73 +25,65 @@
     <!-- ============ FILTERS ============ -->
     <section class="view" id="view-filters">
       <div class="hero">
-        <h1>Find your college the fun way.</h1>
-        <p>Set what matters to you, then swipe through matching schools — one card at a
-          time. Keep the ones you like, pass on the rest, and build a shortlist.
-          Every degree-granting U.S. college is in here, so you won't miss one.</p>
+        <h1>Find your college by swiping.</h1>
+        <p>Tell us what matters, then swipe through matching schools — each with a
+          photo, a plain-English summary, and campus-feel metrics. Save the ones you
+          like to a shortlist. Every degree-granting U.S. college is included.</p>
       </div>
 
-      <form id="filterForm" class="filters">
+      <form id="filterForm" class="panel filters">
+        <label class="search-wrap">
+          <span class="search-ico">🔎</span>
+          <input type="search" id="nameSearch" placeholder="Jump to a school by name (optional)…" autocomplete="off" />
+        </label>
+
         <div class="filter-grid">
-
-          <fieldset class="fgroup">
-            <legend>Region</legend>
-            <div class="chips" data-name="region"></div>
-          </fieldset>
-
-          <fieldset class="fgroup">
-            <legend>State <span class="hint">optional</span></legend>
-            <input type="search" id="stateSearch" placeholder="Type a state…" autocomplete="off" />
+          <fieldset class="fgroup"><legend>Region</legend><div class="chips" data-name="region"></div></fieldset>
+          <fieldset class="fgroup"><legend>State <span class="hint">optional</span></legend>
+            <input type="search" class="mini-search" data-for="state" placeholder="Type a state…" autocomplete="off" />
             <div class="chips scroll" data-name="state"></div>
           </fieldset>
-
-          <fieldset class="fgroup">
-            <legend>Degree focus</legend>
-            <div class="chips" data-name="degree"></div>
-          </fieldset>
-
-          <fieldset class="fgroup">
-            <legend>School type</legend>
-            <div class="chips" data-name="control"></div>
-          </fieldset>
-
-          <fieldset class="fgroup">
-            <legend>Size</legend>
-            <div class="chips" data-name="sizeCategory"></div>
-          </fieldset>
-
-          <fieldset class="fgroup">
-            <legend>Setting</legend>
-            <div class="chips" data-name="setting"></div>
-          </fieldset>
-
-          <fieldset class="fgroup">
-            <legend>Selectivity</legend>
-            <div class="chips" data-name="selectivity"></div>
-          </fieldset>
-
-          <fieldset class="fgroup">
-            <legend>Max net price <span class="hint" id="costLabel">no limit</span></legend>
+          <fieldset class="fgroup"><legend>Degree focus</legend><div class="chips" data-name="degree"></div></fieldset>
+          <fieldset class="fgroup"><legend>School type</legend><div class="chips" data-name="control"></div></fieldset>
+          <fieldset class="fgroup"><legend>Size</legend><div class="chips" data-name="sizeCategory"></div></fieldset>
+          <fieldset class="fgroup"><legend>Setting</legend><div class="chips" data-name="setting"></div></fieldset>
+          <fieldset class="fgroup"><legend>Selectivity</legend><div class="chips" data-name="selectivity"></div></fieldset>
+          <fieldset class="fgroup"><legend>Max net price <span class="hint" id="costLabel">no limit</span></legend>
             <input type="range" id="costRange" min="0" max="60000" step="1000" value="60000" />
             <p class="tiny">Average yearly cost after aid. Schools with unknown cost still appear.</p>
           </fieldset>
 
-          <fieldset class="fgroup wide">
-            <legend>Fields of study <span class="hint">optional — matches a school's most popular majors</span></legend>
-            <input type="search" id="majorSearch" placeholder="Search a field, e.g. Engineering…" autocomplete="off" />
-            <div class="chips scroll" data-name="major"></div>
+          <fieldset class="fgroup wide"><legend>Fields of study
+              <span class="hint">optional — matches any subject the school offers</span></legend>
+            <input type="search" class="mini-search" data-for="field" placeholder="Search a subject, e.g. Engineering, Nursing, Psychology…" autocomplete="off" />
+            <div class="chips scroll" data-name="field"></div>
           </fieldset>
 
-          <fieldset class="fgroup wide">
-            <legend>Community &amp; mission <span class="hint">optional</span></legend>
+          <fieldset class="fgroup wide"><legend>Campus vibe <span class="hint">optional</span></legend>
+            <div class="chips" data-name="vibe"></div>
+          </fieldset>
+
+          <fieldset class="fgroup wide"><legend>Community &amp; mission <span class="hint">optional</span></legend>
             <div class="chips" data-name="mission"></div>
           </fieldset>
 
+          <fieldset class="fgroup"><legend>Sort deck by</legend>
+            <select id="sortBy" class="select">
+              <option value="score">Recommended</option>
+              <option value="name">Name (A–Z)</option>
+              <option value="selective">Most selective</option>
+              <option value="retention">Highest retention</option>
+              <option value="grad">Best graduation rate</option>
+              <option value="size_desc">Largest first</option>
+              <option value="size_asc">Smallest first</option>
+              <option value="cost_asc">Lowest cost</option>
+            </select>
+          </fieldset>
         </div>
 
         <div class="filter-actions">
           <button type="button" class="btn ghost" id="resetBtn">Reset</button>
-          <button type="submit" class="btn primary" id="applyBtn">Show <span id="matchCount">…</span> matches →</button>
+          <button type="submit" class="btn primary" id="applyBtn">Show <span id="matchCount">…</span> schools →</button>
         </div>
       </form>
     </section>
@@ -105,16 +96,14 @@
         <button class="btn ghost small" id="undoBtn" disabled>↺ Undo</button>
       </div>
 
-      <div class="deck" id="deck">
-        <!-- cards injected here -->
-      </div>
+      <div class="deck" id="deck"></div>
 
-      <div class="deck-empty" id="deckEmpty" hidden>
+      <div class="deck-empty panel" id="deckEmpty" hidden>
         <div class="empty-emoji">🎉</div>
         <h2 id="emptyTitle">That's every match!</h2>
-        <p id="emptyMsg">You've been through all matching schools.</p>
+        <p id="emptyMsg"></p>
         <div class="empty-actions">
-          <button class="btn primary" data-go="list">See my list →</button>
+          <button class="btn primary" data-go="list">See my shortlist →</button>
           <button class="btn ghost" data-go="filters">Adjust filters</button>
           <button class="btn ghost" id="reviewPassed" hidden>Reconsider passed</button>
         </div>
@@ -122,12 +111,13 @@
 
       <div class="deck-controls" id="deckControls">
         <button class="round pass" id="btnPass" title="Pass (←)">✕</button>
-        <button class="round info" id="btnInfo" title="Read more">ℹ</button>
+        <button class="round info" id="btnInfo" title="More info (↑)">ℹ</button>
         <button class="round save" id="btnSave" title="Save (→)">♥</button>
       </div>
+      <p class="deck-hint">Swipe the photo, tap the buttons, or use ← / → keys · tap ℹ for full details</p>
     </section>
 
-    <!-- ============ MY LIST ============ -->
+    <!-- ============ SHORTLIST ============ -->
     <section class="view" id="view-list" hidden>
       <div class="list-head">
         <h1>My shortlist</h1>
@@ -140,14 +130,13 @@
       </div>
       <div id="savedList" class="saved-list"></div>
       <div id="savedEmpty" class="muted center pad">
-        No saved colleges yet. Head to <button class="linklike" data-go="deck">Swipe</button> and start saving the ones you like.
+        No saved colleges yet. Head to <button class="linklike" data-go="deck">Swipe</button> and save the ones you like.
       </div>
     </section>
 
   </main>
 
   <div id="toast" class="toast" hidden></div>
-
   <script src="app.js"></script>
 </body>
 </html>
