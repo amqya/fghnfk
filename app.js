@@ -9,6 +9,21 @@
   let profile = loadProfile();
   const compare = { a: null, b: null };
 
+  // ---------- theme ----------
+  function applyTheme(t) {
+    if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+    else document.documentElement.removeAttribute("data-theme");
+    const btn = document.getElementById("themeToggle");
+    if (btn) btn.textContent = currentDark() ? "☀️" : "🌙";
+  }
+  function currentDark() {
+    const t = localStorage.getItem("unimatch.theme");
+    if (t === "dark") return true;
+    if (t === "light") return false;
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+  (function initTheme() { applyTheme(localStorage.getItem("unimatch.theme")); })();
+
   // ---------- academic profile & chancing ----------
   const ACT_TO_SAT = { 36:1590,35:1540,34:1500,33:1460,32:1430,31:1400,30:1370,29:1340,28:1310,27:1280,26:1240,25:1210,24:1180,23:1140,22:1110,21:1080,20:1040,19:1010,18:970,17:930,16:890,15:850,14:800,13:760,12:710,11:670,10:630,9:590 };
   function loadProfile() { try { return { sat: null, act: null, gpa: null, aLevels: [], ...(JSON.parse(localStorage.getItem(LS.profile)) || {}) }; } catch { return { sat: null, act: null, gpa: null, aLevels: [] }; } }
@@ -192,6 +207,12 @@
   };
   const academicScore = c => c.satAvg != null ? Math.max(0, Math.min(100, Math.round((c.satAvg - 800) / 6))) : null;
   const scaleScore = c => c.size != null ? Math.min(100, Math.round(Math.log10(c.size + 1) / Math.log10(60000) * 100)) : null;
+  const socialScore = c => {
+    const s = scaleScore(c), r = residentialScore(c);
+    if (s == null && r == null) return null;
+    if (s == null) return r; if (r == null) return s;
+    return Math.round(s * 0.55 + r * 0.45);
+  };
 
   // ---------- matching ----------
   function passes(c) {
@@ -317,10 +338,11 @@
       ...missionBadges(c).map(m => `<span class="badge mission">${m}</span>`),
     ].join("");
 
-    // feel metrics (main view)
+    // feel metrics (main view) — estimated from official stats
     const feel = [
-      metricRow("Academic intensity", academicScore(c), c.satAvg ? `Avg SAT ~${fmt(c.satAvg)}` : "", "warm"),
-      metricRow("Student satisfaction", c.retention, "Freshmen who return for sophomore year", "good"),
+      metricRow("Social scene", socialScore(c), "Bigger + more residential = livelier", ""),
+      metricRow("Student happiness", c.retention, "Freshman return rate — a proxy for how much students like it", "good"),
+      metricRow("Academic pressure", academicScore(c), c.satAvg ? `Avg SAT ~${fmt(c.satAvg)}` : "", "warm"),
       metricRow("Campus scale", scaleScore(c), c.size ? `${fmt(c.size)} undergrads` : "", ""),
       metricRow("Diversity", c.diversity, "Racial/ethnic mix of the student body", ""),
     ].join("");
@@ -386,9 +408,10 @@
         <div class="badges">${badges}</div>
         <div class="quickstats">${qs.map(([k, v]) => `<div class="qs"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")}</div>
         <p class="summary">${esc(summarize(c))}</p>
+        <div class="metrics-head">Campus vibe <span class="est-tag" title="Estimated from official statistics (size, retention, selectivity, diversity) — not student opinion polls.">estimated</span></div>
         <div class="metrics">${feel}</div>
         <a class="studentlife-link" href="https://www.niche.com/colleges/search/best-colleges/?q=${encodeURIComponent(c.name)}" target="_blank" rel="noopener">
-          🎉 Social scene, Greek life &amp; happiness — student reviews ↗</a>
+          🎉 Greek life, party scene &amp; real student reviews ↗</a>
         <button type="button" class="readmore-btn">Read more ▾</button>
         <div class="details hidden">
           ${admHtml}
@@ -680,6 +703,11 @@
   let tT; function toast(m) { const t = document.getElementById("toast"); t.textContent = m; t.hidden = false; clearTimeout(tT); tT = setTimeout(() => t.hidden = true, 1800); }
 
   function wire() {
+    document.getElementById("themeToggle").addEventListener("click", () => {
+      const dark = !currentDark();
+      localStorage.setItem("unimatch.theme", dark ? "dark" : "light");
+      applyTheme(dark ? "dark" : "light");
+    });
     document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => show(b.dataset.go)));
     document.getElementById("brandHome").addEventListener("click", () => show("filters"));
     document.getElementById("filterForm").addEventListener("submit", e => { e.preventDefault(); show("deck"); });

@@ -23,8 +23,18 @@ Every degree-granting college in the U.S. is included, so you won't miss one.
    admitted SAT range, cost, graduation rate, retention, earnings, diversity, and
    your Safety/Target/Reach standing for each), with the stronger figure highlighted.
 
-Enter an SAT or ACT score once and every card shows whether it's a Safety, Target,
-or Reach, alongside the school's overall acceptance rate. (Per-major admit rates
+Enter an SAT, ACT, or predicted **A-levels** (for international students) once and
+every card shows whether it's a Safety, Target, or Reach, alongside the school's
+overall acceptance rate.
+
+Each card shows an **estimated "campus vibe"** — social scene, student happiness,
+academic pressure, campus scale and diversity — computed transparently from official
+statistics (size, freshman-retention, selectivity, diversity) and clearly marked
+*estimated*. Genuinely subjective ratings (Greek life, party scene) aren't in any
+open dataset, so those link out to student reviews instead of being invented.
+
+A **light/dark theme** toggle sits in the top bar and follows your system setting by
+default. (Per-major admit rates
 aren't published in the federal data, so the rate shown is the whole school's;
 cards link to student-review sites for the more subjective stuff.)
 
