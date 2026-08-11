@@ -38,11 +38,26 @@
     const top3 = g.map(x => AL_POINTS[x]).sort((a, b) => b - a).slice(0, 3);
     return AL_SUM_TO_SAT[top3.reduce((a, b) => a + b, 0)] ?? null;
   }
-  function userSAT() {
-    if (profile.sat) return profile.sat;
-    if (profile.act && ACT_TO_SAT[Math.round(profile.act)]) return ACT_TO_SAT[Math.round(profile.act)];
-    return aLevelSAT();
+  function testSAT() {
+    const t = [];
+    if (profile.sat) t.push(profile.sat);
+    if (profile.act && ACT_TO_SAT[Math.round(profile.act)]) t.push(ACT_TO_SAT[Math.round(profile.act)]);
+    return t.length ? Math.max(...t) : null;   // best of SAT / ACT
   }
+  // Combine a test score with predicted A-levels into one academic level,
+  // leaning toward the stronger of the two (so a mid score isn't the whole story).
+  function profileEquiv() {
+    const parts = [];
+    const t = testSAT();
+    if (t != null) parts.push({ label: profile.sat ? "SAT" : "ACT", v: t });
+    const al = aLevelSAT();
+    if (al != null) parts.push({ label: "A-levels", v: al });
+    if (!parts.length) return { value: null, parts };
+    if (parts.length === 1) return { value: parts[0].v, parts };
+    const mean = (parts[0].v + parts[1].v) / 2, max = Math.max(parts[0].v, parts[1].v);
+    return { value: Math.round((mean + max) / 2), parts };   // blend, weighted to strongest
+  }
+  const userSAT = () => profileEquiv().value;
   const hasProfile = () => userSAT() != null;
 
   // Returns 'safety' | 'target' | 'reach' | 'open' | null
@@ -196,11 +211,14 @@
     updateProfileNote();
   }
   function updateProfileNote() {
-    const u = userSAT(), note = document.getElementById("profileNote");
-    if (u == null) { note.textContent = "Add an SAT, ACT, or predicted A-levels to see which schools are a Safety, Target, or Reach for you."; return; }
-    const src = profile.sat ? "your SAT" : profile.act ? "your ACT" : "your predicted A-levels";
-    const approx = profile.sat ? "" : " (approx)";
-    note.textContent = `Using an SAT-equivalent of ${u}${approx} from ${src}. Safety / Target / Reach labels now show on every school.`;
+    const { value, parts } = profileEquiv(), note = document.getElementById("profileNote");
+    if (value == null) { note.textContent = "Add an SAT, ACT, or predicted A-levels to see which schools are a Safety, Target, or Reach for you."; return; }
+    if (parts.length === 1) {
+      const approx = parts[0].label === "SAT" ? "" : " (approx)";
+      note.textContent = `Using an SAT-equivalent of ${value}${approx} from your ${parts[0].label}. Safety / Target / Reach labels now show on every school.`;
+    } else {
+      note.textContent = `Blending your ${parts[0].label} (${parts[0].v}) and ${parts[1].label} (≈${parts[1].v}) into an academic level of ${value}, leaning toward your strongest — so a mid score isn't the whole story. Labels now show on every school.`;
+    }
   }
 
   function updateCostLabel() {
