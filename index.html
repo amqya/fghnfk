@@ -54,6 +54,14 @@
           </label>
           <button type="button" class="btn ghost small" id="clearProfile">Clear</button>
         </div>
+        <div class="alevels">
+          <span class="al-label">A-levels (predicted) <span class="hint">international students — used if you have no SAT/ACT</span></span>
+          <div class="al-selects">
+            <select id="pA1" class="al"></select>
+            <select id="pA2" class="al"></select>
+            <select id="pA3" class="al"></select>
+          </div>
+        </div>
         <p class="tiny" id="profileNote"></p>
       </div>
 
@@ -107,6 +115,7 @@
           </fieldset>
         </div>
 
+        <p class="tiny match-hint" id="matchHint" hidden></p>
         <div class="filter-actions">
           <button type="button" class="btn ghost" id="resetBtn">Reset</button>
           <button type="submit" class="btn primary" id="applyBtn">Show <span id="matchCount">…</span> schools →</button>

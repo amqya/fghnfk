@@ -11,12 +11,22 @@
 
   // ---------- academic profile & chancing ----------
   const ACT_TO_SAT = { 36:1590,35:1540,34:1500,33:1460,32:1430,31:1400,30:1370,29:1340,28:1310,27:1280,26:1240,25:1210,24:1180,23:1140,22:1110,21:1080,20:1040,19:1010,18:970,17:930,16:890,15:850,14:800,13:760,12:710,11:670,10:630,9:590 };
-  function loadProfile() { try { return JSON.parse(localStorage.getItem(LS.profile)) || { sat: null, act: null, gpa: null }; } catch { return { sat: null, act: null, gpa: null }; } }
+  function loadProfile() { try { return { sat: null, act: null, gpa: null, aLevels: [], ...(JSON.parse(localStorage.getItem(LS.profile)) || {}) }; } catch { return { sat: null, act: null, gpa: null, aLevels: [] }; } }
   function saveProfile() { try { localStorage.setItem(LS.profile, JSON.stringify(profile)); } catch {} }
+
+  // A-levels -> approximate SAT-equivalent (rough concordance; US admissions weigh far more)
+  const AL_POINTS = { "A*": 5, "A": 4, "B": 3, "C": 2, "D": 1, "E": 0 };
+  const AL_SUM_TO_SAT = { 15: 1550, 14: 1520, 13: 1490, 12: 1450, 11: 1400, 10: 1350, 9: 1290, 8: 1230, 7: 1170, 6: 1110, 5: 1050, 4: 1000, 3: 960, 2: 920, 1: 880, 0: 850 };
+  function aLevelSAT() {
+    const g = (profile.aLevels || []).filter(x => x in AL_POINTS);
+    if (g.length < 3) return null;
+    const top3 = g.map(x => AL_POINTS[x]).sort((a, b) => b - a).slice(0, 3);
+    return AL_SUM_TO_SAT[top3.reduce((a, b) => a + b, 0)] ?? null;
+  }
   function userSAT() {
     if (profile.sat) return profile.sat;
     if (profile.act && ACT_TO_SAT[Math.round(profile.act)]) return ACT_TO_SAT[Math.round(profile.act)];
-    return null;
+    return aLevelSAT();
   }
   const hasProfile = () => userSAT() != null;
 
@@ -143,25 +153,30 @@
   }
   function buildProfileUI() {
     const sat = document.getElementById("pSat"), act = document.getElementById("pAct"), gpa = document.getElementById("pGpa");
+    const als = [document.getElementById("pA1"), document.getElementById("pA2"), document.getElementById("pA3")];
     sat.value = profile.sat || ""; act.value = profile.act || ""; gpa.value = profile.gpa || "";
+    const opts = ['<option value="">—</option>'].concat(["A*", "A", "B", "C", "D", "E"].map(g => `<option value="${g}">${g}</option>`)).join("");
+    als.forEach((sel, i) => { sel.innerHTML = opts; sel.value = (profile.aLevels || [])[i] || ""; });
     const onChange = () => {
       profile.sat = sat.value ? Math.max(400, Math.min(1600, +sat.value)) : null;
       profile.act = act.value ? Math.max(1, Math.min(36, +act.value)) : null;
       profile.gpa = gpa.value ? Math.max(0, Math.min(4, +gpa.value)) : null;
+      profile.aLevels = als.map(s => s.value).filter(Boolean);
       saveProfile(); updateProfileNote();
     };
-    [sat, act, gpa].forEach(el => el.addEventListener("input", onChange));
+    [sat, act, gpa, ...als].forEach(el => el.addEventListener("input", onChange));
     document.getElementById("clearProfile").addEventListener("click", () => {
-      profile = { sat: null, act: null, gpa: null }; saveProfile();
-      sat.value = act.value = gpa.value = ""; updateProfileNote();
+      profile = { sat: null, act: null, gpa: null, aLevels: [] }; saveProfile();
+      sat.value = act.value = gpa.value = ""; als.forEach(s => s.value = ""); updateProfileNote();
     });
     updateProfileNote();
   }
   function updateProfileNote() {
     const u = userSAT(), note = document.getElementById("profileNote");
-    note.textContent = u == null
-      ? "Add a score to see which schools are a Safety, Target, or Reach for you."
-      : `Using an SAT-equivalent of ${u}. Safety / Target / Reach labels now show on every school.`;
+    if (u == null) { note.textContent = "Add an SAT, ACT, or predicted A-levels to see which schools are a Safety, Target, or Reach for you."; return; }
+    const src = profile.sat ? "your SAT" : profile.act ? "your ACT" : "your predicted A-levels";
+    const approx = profile.sat ? "" : " (approx)";
+    note.textContent = `Using an SAT-equivalent of ${u}${approx} from ${src}. Safety / Target / Reach labels now show on every school.`;
   }
 
   function updateCostLabel() {
@@ -219,7 +234,12 @@
   }
 
   function updateMatchCount() {
-    document.getElementById("matchCount").textContent = ALL.filter(passes).length.toLocaleString();
+    const n = ALL.filter(passes).length;
+    document.getElementById("matchCount").textContent = n.toLocaleString();
+    const hint = document.getElementById("matchHint");
+    if (n === 0) { hint.hidden = false; hint.textContent = "No schools match. Your filters combine with AND — try removing a few, especially Campus-vibe or Selectivity ones (those also drop schools that don't report that stat)."; }
+    else if (n < 25) { hint.hidden = false; hint.textContent = `Only ${n} match. Filters stack (a school must pass every one), and Campus-vibe/Selectivity filters exclude schools with unreported data. Loosen a filter to see more.`; }
+    else hint.hidden = true;
   }
 
   // ---------- photos (Wikipedia, client-side, cached) ----------
@@ -268,8 +288,11 @@
     return m;
   }
   function metricRow(label, val, cap, cls) {
-    if (val == null) return "";
-    return `<div class="metric"><div class="lab"><span>${label}</span><span class="val">${val}${cls === "raw" ? "" : "%"}</span></div>
+    if (val == null) {
+      return `<div class="metric"><div class="lab"><span>${label}</span><span class="val muted-val">Not reported</span></div>
+        <div class="bar empty"><span style="width:0%"></span></div></div>`;
+    }
+    return `<div class="metric"><div class="lab"><span>${label}</span><span class="val">${val}%</span></div>
       <div class="bar ${cls || ""}"><span style="width:${Math.max(3, Math.min(100, val))}%"></span></div>
       ${cap ? `<div class="cap">${cap}</div>` : ""}</div>`;
   }
@@ -364,6 +387,8 @@
         <div class="quickstats">${qs.map(([k, v]) => `<div class="qs"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")}</div>
         <p class="summary">${esc(summarize(c))}</p>
         <div class="metrics">${feel}</div>
+        <a class="studentlife-link" href="https://www.niche.com/colleges/search/best-colleges/?q=${encodeURIComponent(c.name)}" target="_blank" rel="noopener">
+          🎉 Social scene, Greek life &amp; happiness — student reviews ↗</a>
         <button type="button" class="readmore-btn">Read more ▾</button>
         <div class="details hidden">
           ${admHtml}

@@ -169,6 +169,18 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .bar.warm > span { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
 .metric .cap { font-size: 11px; color: var(--muted); margin-top: 3px; }
 
+.bar.empty > span { background: #d7dbe6; }
+.muted-val { color: var(--muted); font-weight: 700; }
+.studentlife-link { display: block; text-align: center; margin: 4px 0 10px; padding: 10px; border-radius: 11px;
+  background: #fff5e9; border: 1px solid #ffe4c6; color: #b5601e; font-weight: 700; font-size: 13.5px; text-decoration: none; }
+.studentlife-link:hover { background: #ffefd8; }
+.match-hint { color: #b5601e; background: #fff5e9; border: 1px solid #ffe4c6; border-radius: 10px; padding: 9px 12px; margin: 4px 0 0; }
+.alevels { margin-top: 14px; }
+.al-label { display: block; font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-bottom: 7px; }
+.al-selects { display: flex; gap: 8px; }
+.al { padding: 9px 10px; border: 1.5px solid var(--line); border-radius: 10px; font-size: 15px; background: #fff; min-width: 68px; outline: none; }
+.al:focus { border-color: var(--accent); }
+
 .readmore-btn { width: 100%; margin-top: 6px; background: var(--chip-bg); border: 1px solid var(--line);
   color: var(--accent-ink); font-weight: 700; padding: 10px; border-radius: 11px; cursor: pointer; font-size: 14px; }
 .readmore-btn:hover { background: #eaedf5; }
