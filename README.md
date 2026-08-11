@@ -15,8 +15,18 @@ Every degree-granting college in the U.S. is included, so you won't miss one.
 2. **Swipe** — each school shows a quick summary and key stats. Tap **ℹ** or
    *Read more* for the full picture, then **✕ Pass** or **♥ Save**
    (swipe, click, or use ← / → arrow keys). **Undo** if you change your mind.
-3. **My List** — your saved schools, with links to each official site. Copy the
-   whole shortlist to your clipboard, or jump back into swiping.
+3. **Shortlist** — your saved schools, with links to each official site. Copy the
+   whole shortlist to your clipboard, or jump back into swiping. Enter your SAT/ACT
+   under *Filters → Your stats* and the shortlist groups schools into **Safety /
+   Target / Reach** for you.
+4. **Compare** — pick any two schools and see them side by side (acceptance rate,
+   admitted SAT range, cost, graduation rate, retention, earnings, diversity, and
+   your Safety/Target/Reach standing for each), with the stronger figure highlighted.
+
+Enter an SAT or ACT score once and every card shows whether it's a Safety, Target,
+or Reach, alongside the school's overall acceptance rate. (Per-major admit rates
+aren't published in the federal data, so the rate shown is the whole school's;
+cards link to student-review sites for the more subjective stuff.)
 
 Your filters, saved schools, and passed schools are remembered in your browser
 (localStorage) — close the tab and pick up where you left off.

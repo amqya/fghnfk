@@ -2,10 +2,52 @@
 (() => {
   "use strict";
 
-  const LS = { saved: "unimatch.saved", passed: "unimatch.passed", filters: "unimatch.filters", photo: "unimatch.photo." };
+  const LS = { saved: "unimatch.saved", passed: "unimatch.passed", filters: "unimatch.filters", photo: "unimatch.photo.", profile: "unimatch.profile" };
 
-  let ALL = [], matches = [], idx = 0, lastAction = null;
+  let ALL = [], BYID = {}, matches = [], idx = 0, lastAction = null;
   const state = { saved: loadSet(LS.saved), passed: loadSet(LS.passed) };
+  let profile = loadProfile();
+  const compare = { a: null, b: null };
+
+  // ---------- academic profile & chancing ----------
+  const ACT_TO_SAT = { 36:1590,35:1540,34:1500,33:1460,32:1430,31:1400,30:1370,29:1340,28:1310,27:1280,26:1240,25:1210,24:1180,23:1140,22:1110,21:1080,20:1040,19:1010,18:970,17:930,16:890,15:850,14:800,13:760,12:710,11:670,10:630,9:590 };
+  function loadProfile() { try { return JSON.parse(localStorage.getItem(LS.profile)) || { sat: null, act: null, gpa: null }; } catch { return { sat: null, act: null, gpa: null }; } }
+  function saveProfile() { try { localStorage.setItem(LS.profile, JSON.stringify(profile)); } catch {} }
+  function userSAT() {
+    if (profile.sat) return profile.sat;
+    if (profile.act && ACT_TO_SAT[Math.round(profile.act)]) return ACT_TO_SAT[Math.round(profile.act)];
+    return null;
+  }
+  const hasProfile = () => userSAT() != null;
+
+  // Returns 'safety' | 'target' | 'reach' | 'open' | null
+  function classify(c) {
+    const u = userSAT();
+    if (u == null) return null;
+    const adm = c.admitRate, s25 = c.sat25, s75 = c.sat75;
+    // hyper-selective: a reach for almost everyone
+    if (adm != null && adm < 15) {
+      if (s75 && u >= s75 && adm >= 10) return "target";
+      return "reach";
+    }
+    if (s25 && s75) {
+      let band = u < s25 - 20 ? "reach" : u > s75 + 10 ? "safety" : "target";
+      if (adm != null) {
+        if (adm < 25 && band === "safety") band = "target";
+        if (adm < 25 && band === "target") band = u > s75 + 40 ? "target" : "reach";
+        if (adm >= 75 && band === "target" && u >= s25) band = "safety";
+      }
+      return band;
+    }
+    if (adm != null) return adm >= 55 ? "safety" : adm >= 30 ? "target" : "reach";
+    return "open"; // open-admission / no selective process
+  }
+  const CH_LABEL = { safety: "Safety", target: "Target", reach: "Reach", open: "Open admission" };
+  function chanceChip(c) {
+    const k = classify(c);
+    if (!k) return "";
+    return `<span class="chance-chip ${k}">${k === "open" ? "🎓" : k === "safety" ? "🟢" : k === "target" ? "🎯" : "🌙"} ${CH_LABEL[k]}</span>`;
+  }
 
   const REGIONS = ["Northeast", "Midwest", "South", "West", "Territories"];
   const DEGREES = [["4-year", "🎓 4-year"], ["2-year", "🏫 2-year / community"], ["Graduate", "📚 Grad-focused"]];
@@ -34,8 +76,8 @@
   let filters = loadFilters();
 
   fetch("data/colleges.json").then(r => r.json()).then(data => {
-    ALL = data;
-    buildFilterUI(); wire(); updateMatchCount(); updateSavedPill(); show("filters");
+    ALL = data; data.forEach(c => BYID[c.id] = c);
+    buildFilterUI(); buildProfileUI(); buildCompareUI(); wire(); updateMatchCount(); updateSavedPill(); show("filters");
   }).catch(() => {
     document.getElementById("view-filters").innerHTML =
       '<div class="panel" style="padding:24px;text-align:center">Could not load college data. Serve the folder over HTTP (e.g. <code>python3 -m http.server</code>) rather than opening the file directly.</div>';
@@ -99,6 +141,29 @@
     sortS.value = filters.sort || "score";
     sortS.addEventListener("change", () => { filters.sort = sortS.value; saveFilters(); });
   }
+  function buildProfileUI() {
+    const sat = document.getElementById("pSat"), act = document.getElementById("pAct"), gpa = document.getElementById("pGpa");
+    sat.value = profile.sat || ""; act.value = profile.act || ""; gpa.value = profile.gpa || "";
+    const onChange = () => {
+      profile.sat = sat.value ? Math.max(400, Math.min(1600, +sat.value)) : null;
+      profile.act = act.value ? Math.max(1, Math.min(36, +act.value)) : null;
+      profile.gpa = gpa.value ? Math.max(0, Math.min(4, +gpa.value)) : null;
+      saveProfile(); updateProfileNote();
+    };
+    [sat, act, gpa].forEach(el => el.addEventListener("input", onChange));
+    document.getElementById("clearProfile").addEventListener("click", () => {
+      profile = { sat: null, act: null, gpa: null }; saveProfile();
+      sat.value = act.value = gpa.value = ""; updateProfileNote();
+    });
+    updateProfileNote();
+  }
+  function updateProfileNote() {
+    const u = userSAT(), note = document.getElementById("profileNote");
+    note.textContent = u == null
+      ? "Add a score to see which schools are a Safety, Target, or Reach for you."
+      : `Using an SAT-equivalent of ${u}. Safety / Target / Reach labels now show on every school.`;
+  }
+
   function updateCostLabel() {
     const v = +document.getElementById("costRange").value;
     document.getElementById("costLabel").textContent = v >= 60000 ? "no limit" : "up to $" + v.toLocaleString() + "/yr";
@@ -212,13 +277,17 @@
   function cardEl(c, isTop) {
     const el = document.createElement("article");
     el.className = "card" + (isTop ? " top" : "");
-    const qs = [];
+    let qs = [];
     if (c.size != null) qs.push(["Undergrads", fmt(c.size)]);
+    if (c.admitRate != null) qs.push(["Acceptance", c.admitRate + "%"]);
     if (c.netPrice != null) qs.push(["Avg net price", "$" + fmt(c.netPrice) + "/yr"]);
     if (c.gradRate != null) qs.push(["Grad rate", c.gradRate + "%"]);
-    qs.push(["Selectivity", c.selectivity.replace(" / ", "/")]);
+    if (qs.length < 4) qs.push(["Selectivity", c.selectivity.replace(" / ", "/")]);
+    qs = qs.slice(0, 4);
 
+    const chChip = chanceChip(c);
     const badges = [
+      chChip,
       `<span class="badge">${c.control}</span>`, `<span class="badge">${c.degree}</span>`,
       c.setting ? `<span class="badge">${c.setting}</span>` : "",
       c.sizeCategory ? `<span class="badge">${c.sizeCategory}</span>` : "",
@@ -248,6 +317,31 @@
     if (c.partTimePct != null) kv.push(["Part-time students", c.partTimePct + "%"]);
     const resScore = residentialScore(c);
 
+    // admissions & chances
+    const cat = classify(c), u = userSAT();
+    const admKv = [];
+    admKv.push(["Overall acceptance rate", c.admitRate != null ? c.admitRate + "%" : "Open / not reported"]);
+    if (c.sat25 && c.sat75) admKv.push(["Admitted SAT (middle 50%)", c.sat25 + "–" + c.sat75]);
+    if (c.satAvg) admKv.push(["Average SAT", fmt(c.satAvg)]);
+    let chanceLine;
+    if (u == null) {
+      chanceLine = `<p class="note">Add your SAT or ACT under <b>Filters → Your stats</b> to see whether this is a Safety, Target, or Reach for you.</p>`;
+    } else {
+      const why = {
+        safety: "Your scores are at or above this school's admitted range and it admits most applicants.",
+        target: "Your scores land within this school's admitted range — a realistic match.",
+        reach: "This school is more selective than your current scores suggest, so it's a stretch.",
+        open: "This school has open admission — essentially everyone who applies is admitted.",
+      }[cat] || "";
+      chanceLine = `<p class="note">For your SAT-equivalent of <b>${u}</b>: ${chanceChip(c)} — ${why}</p>`;
+    }
+    const admHtml = `<h3>Admissions &amp; your chances</h3>
+      <div class="kv">${admKv.map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`).join("")}</div>
+      ${chanceLine}
+      <p class="note">Per-major acceptance rates aren't published in the federal data, so this is the
+        <b>overall</b> rate. Some schools admit separately into competitive majors (e.g. engineering,
+        nursing, business) — check the school's site for those. ${c.majors.length ? `Your subject areas here include ${esc(c.majors.slice(0, 3).join(", "))}.` : ""}</p>`;
+
     const nicheSlug = c.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     const links = [
       c.url ? `<a href="${encodeURI(c.url)}" target="_blank" rel="noopener">Official site ↗</a>` : "",
@@ -272,6 +366,7 @@
         <div class="metrics">${feel}</div>
         <button type="button" class="readmore-btn">Read more ▾</button>
         <div class="details hidden">
+          ${admHtml}
           <h3>Campus feel</h3>
           <div class="metrics">
             ${metricRow("Residential vibe", resScore, resScore != null ? "Higher = more full-time, live-on-campus students" : "", "raw2")}
@@ -287,6 +382,7 @@
           <div class="chiplist">${c.fields.map(m => `<span>${esc(m)}</span>`).join("") || "<span>Not reported</span>"}</div>
           <h3>Explore &amp; verify</h3>
           <div class="links">${links}</div>
+          <button type="button" class="cmp-add" data-id="${c.id}" style="margin-top:10px">⇄ Add to compare</button>
         </div>
       </div>`;
 
@@ -297,6 +393,9 @@
       rm.textContent = hidden ? "Read more ▾" : "Show less ▴";
       if (!hidden) det.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
+
+    const cmpBtn = el.querySelector(".cmp-add");
+    if (cmpBtn) cmpBtn.addEventListener("click", e => { e.stopPropagation(); addToCompare(c.id); });
 
     if (isTop) enableDrag(el);
     setPhoto(c, el.querySelector(".photo"), el.querySelector(".photo-fallback"));
@@ -407,35 +506,133 @@
   const pt = e => e.touches && e.touches[0] ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
 
   // ---------- shortlist ----------
+  function savedCardEl(c) {
+    const el = document.createElement("div");
+    el.className = "saved-card";
+    el.innerHTML = `
+      <div class="thumb" style="background:linear-gradient(135deg,hsl(${hueFor(c.name)} 55% 52%),hsl(${(hueFor(c.name) + 45) % 360} 60% 42%))"><img alt="" style="display:none"></div>
+      <div class="sc-body">
+        <h3>${esc(c.name)}</h3>
+        <div class="loc">📍 ${esc(c.city)}, ${c.state} · ${c.control} · ${c.degree}</div>
+        <div class="row">
+          ${chanceChip(c)}
+          ${c.admitRate != null ? `<span class="badge">${c.admitRate}% admit</span>` : ""}
+          ${c.netPrice != null ? `<span class="badge">$${fmt(c.netPrice)}/yr</span>` : ""}
+          ${c.gradRate != null ? `<span class="badge">${c.gradRate}% grad</span>` : ""}
+        </div>
+        <div class="foot">
+          <button class="cmp-add" data-id="${c.id}">⇄ Compare</button>
+          <button class="remove" data-id="${c.id}">Remove</button>
+        </div>
+      </div>`;
+    el.querySelector(".remove").addEventListener("click", () => {
+      state.saved.delete(c.id); saveSet(LS.saved, state.saved); updateSavedPill(); renderList();
+    });
+    el.querySelector(".cmp-add").addEventListener("click", () => addToCompare(c.id));
+    setPhoto(c, el.querySelector("img"), null);
+    return el;
+  }
+
   function renderList() {
     const wrap = document.getElementById("savedList"), empty = document.getElementById("savedEmpty");
     const saved = ALL.filter(c => state.saved.has(c.id));
     document.getElementById("listSummary").textContent = `${saved.length} saved · ${state.passed.size} passed`;
     empty.style.display = saved.length ? "none" : "";
     wrap.innerHTML = "";
-    saved.forEach(c => {
-      const el = document.createElement("div");
-      el.className = "saved-card";
-      el.innerHTML = `
-        <div class="thumb" style="background:linear-gradient(135deg,hsl(${hueFor(c.name)} 55% 52%),hsl(${(hueFor(c.name) + 45) % 360} 60% 42%))"><img alt="" style="display:none"></div>
-        <div class="sc-body">
-          <h3>${esc(c.name)}</h3>
-          <div class="loc">📍 ${esc(c.city)}, ${c.state} · ${c.control} · ${c.degree}</div>
-          <div class="row">
-            ${c.netPrice != null ? `<span class="badge">$${fmt(c.netPrice)}/yr</span>` : ""}
-            ${c.gradRate != null ? `<span class="badge">${c.gradRate}% grad</span>` : ""}
-            ${c.retention != null ? `<span class="badge">${c.retention}% return</span>` : ""}
-          </div>
-          <div class="foot">
-            ${c.url ? `<a class="weblink" href="${encodeURI(c.url)}" target="_blank" rel="noopener">Official site ↗</a>` : "<span></span>"}
-            <button class="remove" data-id="${c.id}">Remove</button>
-          </div>
-        </div>`;
-      el.querySelector(".remove").addEventListener("click", () => {
-        state.saved.delete(c.id); saveSet(LS.saved, state.saved); updateSavedPill(); renderList();
+
+    if (hasProfile() && saved.length) {
+      const groups = [
+        ["safety", "🟢 Safety schools"], ["target", "🎯 Target schools"],
+        ["reach", "🌙 Reach schools"], ["open", "🎓 Open admission"], [null, "❔ Not assessed"],
+      ];
+      groups.forEach(([key, title]) => {
+        const inGroup = saved.filter(c => (classify(c) || null) === key);
+        if (!inGroup.length) return;
+        const h = document.createElement("div");
+        h.className = "group-h";
+        h.innerHTML = `<h2>${title}</h2><span class="count">${inGroup.length}</span>`;
+        h.style.gridColumn = "1 / -1";
+        wrap.appendChild(h);
+        inGroup.forEach(c => wrap.appendChild(savedCardEl(c)));
       });
-      setPhoto(c, el.querySelector("img"), null);
-      wrap.appendChild(el);
+    } else {
+      saved.forEach(c => wrap.appendChild(savedCardEl(c)));
+    }
+  }
+
+  // ---------- compare ----------
+  function addToCompare(id) {
+    if (compare.a === id || compare.b === id) { toast("Already in compare"); show("compare"); return; }
+    if (!compare.a) compare.a = id;
+    else compare.b = id;
+    show("compare");
+    toast(compare.a && compare.b ? "Comparing two schools" : "Pick one more to compare");
+  }
+  function cmpRow(label, av, bv, better) {
+    // better: 'hi' | 'lo' | null — which raw value wins (for subtle highlight)
+    let ac = "", bc = "";
+    if (better && av.raw != null && bv.raw != null && av.raw !== bv.raw) {
+      const aWins = better === "hi" ? av.raw > bv.raw : av.raw < bv.raw;
+      if (aWins) ac = "better"; else bc = "better";
+    }
+    return `<tr><th>${label}</th><td class="${ac}">${av.txt}</td><td class="${bc}">${bv.txt}</td></tr>`;
+  }
+  const V = (raw, txt) => ({ raw, txt: txt != null ? txt : (raw != null ? raw : "—") });
+
+  function renderCompare() {
+    const box = document.getElementById("compareTable"), empty = document.getElementById("compareEmpty");
+    document.querySelectorAll(".cmp-search").forEach(inp => { const c = BYID[compare[inp.dataset.slot]]; if (c && document.activeElement !== inp) inp.value = c.name; });
+    const a = BYID[compare.a], b = BYID[compare.b];
+    if (!a || !b) { box.innerHTML = ""; empty.style.display = ""; return; }
+    empty.style.display = "none";
+    const th = c => `<div class="thumb" style="background:linear-gradient(135deg,hsl(${hueFor(c.name)} 55% 52%),hsl(${(hueFor(c.name)+45)%360} 60% 42%));${photoBg(c)}"></div>${esc(c.name)}<div class="cmp-x-wrap"><button class="cmp-x" data-clear="a-or-b">✕ remove</button></div>`;
+    const money = n => n == null ? null : "$" + fmt(n);
+    const rows = [
+      cmpRow("Location", V(0, `${esc(a.city)}, ${a.state}`), V(0, `${esc(b.city)}, ${b.state}`), null),
+      cmpRow("Your chances", V(0, chanceChip(a) || "—"), V(0, chanceChip(b) || "—"), null),
+      cmpRow("Acceptance rate", V(a.admitRate, a.admitRate != null ? a.admitRate + "%" : "Open/NA"), V(b.admitRate, b.admitRate != null ? b.admitRate + "%" : "Open/NA"), null),
+      cmpRow("Admitted SAT (mid 50%)", V(a.sat75, a.sat25 && a.sat75 ? a.sat25 + "–" + a.sat75 : "—"), V(b.sat75, b.sat25 && b.sat75 ? b.sat25 + "–" + b.sat75 : "—"), null),
+      cmpRow("Type", V(0, `${a.control} · ${a.degree}`), V(0, `${b.control} · ${b.degree}`), null),
+      cmpRow("Undergrads", V(a.size, fmt(a.size)), V(b.size, fmt(b.size)), null),
+      cmpRow("Avg net price", V(a.netPrice, money(a.netPrice) ? money(a.netPrice) + "/yr" : "—"), V(b.netPrice, money(b.netPrice) ? money(b.netPrice) + "/yr" : "—"), "lo"),
+      cmpRow("Graduation rate", V(a.gradRate, a.gradRate != null ? a.gradRate + "%" : "—"), V(b.gradRate, b.gradRate != null ? b.gradRate + "%" : "—"), "hi"),
+      cmpRow("Freshman retention", V(a.retention, a.retention != null ? a.retention + "%" : "—"), V(b.retention, b.retention != null ? b.retention + "%" : "—"), "hi"),
+      cmpRow("Median pay (10 yr)", V(a.earnings, money(a.earnings)), V(b.earnings, money(b.earnings)), "hi"),
+      cmpRow("Diversity", V(a.diversity, a.diversity != null ? a.diversity + "/100" : "—"), V(b.diversity, b.diversity != null ? b.diversity + "/100" : "—"), "hi"),
+      cmpRow("Setting", V(0, a.setting || "—"), V(0, b.setting || "—"), null),
+      cmpRow("Top fields", V(0, a.majors.slice(0, 3).join(", ") || "—"), V(0, b.majors.slice(0, 3).join(", ") || "—"), null),
+    ].join("");
+    box.innerHTML = `<div style="overflow-x:auto"><table class="cmp-table">
+      <thead><tr><th></th><th>${th(a)}</th><th>${th(b)}</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+    box.querySelectorAll("thead th").forEach((el, i) => {
+      const x = el.querySelector(".cmp-x"); if (!x) return;
+      x.addEventListener("click", () => { if (i === 1) compare.a = null; else compare.b = null; syncCmpInputs(); renderCompare(); });
+    });
+  }
+  function photoBg(c) {
+    const cached = localStorage.getItem(LS.photo + c.id);
+    return cached && cached !== "none" ? `background-image:url('${cached}');background-size:cover;background-position:center;` : "";
+  }
+  function syncCmpInputs() {
+    document.querySelectorAll(".cmp-search").forEach(inp => { const c = BYID[compare[inp.dataset.slot]]; inp.value = c ? c.name : ""; });
+  }
+  function buildCompareUI() {
+    document.querySelectorAll(".cmp-search").forEach(inp => {
+      const slot = inp.dataset.slot, results = document.querySelector(`.cmp-results[data-slot="${slot}"]`);
+      const close = () => setTimeout(() => results.hidden = true, 150);
+      inp.addEventListener("focus", () => { if (inp.value.trim()) inp.dispatchEvent(new Event("input")); });
+      inp.addEventListener("blur", close);
+      inp.addEventListener("input", () => {
+        const q = inp.value.trim().toLowerCase();
+        if (q.length < 2) { results.hidden = true; return; }
+        const hits = ALL.filter(c => c.name.toLowerCase().includes(q)).slice(0, 12);
+        results.innerHTML = hits.map(c => `<button type="button" data-id="${c.id}">${esc(c.name)} <small>${esc(c.city)}, ${c.state}</small></button>`).join("") || `<button disabled>No matches</button>`;
+        results.hidden = false;
+        results.querySelectorAll("button[data-id]").forEach(btn => btn.addEventListener("mousedown", e => {
+          e.preventDefault(); compare[slot] = btn.dataset.id; inp.value = BYID[btn.dataset.id].name; results.hidden = true; renderCompare();
+        }));
+      });
     });
   }
   function copyList() {
@@ -447,10 +644,11 @@
 
   // ---------- nav ----------
   function show(view) {
-    ["filters", "deck", "list"].forEach(v => document.getElementById("view-" + v).hidden = v !== view);
+    ["filters", "deck", "compare", "list"].forEach(v => document.getElementById("view-" + v).hidden = v !== view);
     document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.go === view));
     if (view === "deck") startDeck();
     if (view === "list") renderList();
+    if (view === "compare") { syncCmpInputs(); renderCompare(); }
     window.scrollTo(0, 0);
   }
   function updateSavedPill() { document.getElementById("savedPill").textContent = state.saved.size; }

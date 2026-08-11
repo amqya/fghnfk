@@ -18,7 +18,26 @@ from collections import Counter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAW = os.path.join(HERE, "scorecard-raw.csv")
+ADMIT = os.path.join(HERE, "admit.csv")
 OUT = os.path.join(HERE, "..", "data", "colleges.json")
+
+
+def load_admit():
+    """UNITID -> {rate, sat25, sat75} from the full institution file
+    (admission rate and SAT 25th/75th percentiles are not in the slim file)."""
+    m = {}
+    if not os.path.exists(ADMIT):
+        return m
+    with open(ADMIT, newline="") as fh:
+        for r in csv.DictReader(fh):
+            uid = r["UNITID"]
+            rate = r.get("ADM_RATE", "")
+            m[uid] = {
+                "rate": round(float(rate) * 100) if rate not in ("", "NULL") else None,
+                "sat25": int(r["SAT25"]) if r.get("SAT25") else None,
+                "sat75": int(r["SAT75"]) if r.get("SAT75") else None,
+            }
+    return m
 
 STATE_NAMES = {
     "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",
@@ -199,6 +218,7 @@ def prominence(size, sat, ret, grad, earn, control):
 def build():
     with open(RAW, encoding="utf-8-sig", newline="") as fh:
         rows = list(csv.DictReader(fh))
+    admit = load_admit()
 
     out = []
     for r in rows:
@@ -227,6 +247,7 @@ def build():
             url = "https://" + url
 
         fields = offered_fields(r)
+        adm = admit.get(r.get("UNITID"), {})
         rec = {
             "id": r.get("UNITID"),
             "name": (r.get("INSTNM") or "").strip(),
@@ -241,6 +262,9 @@ def build():
             "sizeCategory": size_category(size),
             "setting": setting_for(r.get("LOCALE", "")),
             "satAvg": sat,
+            "sat25": adm.get("sat25"),
+            "sat75": adm.get("sat75"),
+            "admitRate": adm.get("rate"),
             "selectivity": selectivity_for(sat),
             "netPrice": net,
             "costTier": cost_tier(net),

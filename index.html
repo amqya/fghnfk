@@ -16,6 +16,7 @@
     <nav class="nav">
       <button class="nav-btn" data-go="filters">Filters</button>
       <button class="nav-btn" data-go="deck">Swipe</button>
+      <button class="nav-btn" data-go="compare">Compare</button>
       <button class="nav-btn" data-go="list">Shortlist <span class="pill" id="savedPill">0</span></button>
     </nav>
   </header>
@@ -29,6 +30,31 @@
         <p>Tell us what matters, then swipe through matching schools — each with a
           photo, a plain-English summary, and campus-feel metrics. Save the ones you
           like to a shortlist. Every degree-granting U.S. college is included.</p>
+      </div>
+
+      <div class="panel profile" id="profileBox">
+        <div class="profile-head">
+          <div>
+            <strong>Your stats</strong>
+            <span class="hint">powers Safety / Target / Reach labels — optional, stays on your device</span>
+          </div>
+          <span class="chance-legend">
+            <span class="ch safety">Safety</span><span class="ch target">Target</span><span class="ch reach">Reach</span>
+          </span>
+        </div>
+        <div class="profile-inputs">
+          <label>SAT total <span class="hint">400–1600</span>
+            <input type="number" id="pSat" min="400" max="1600" step="10" placeholder="e.g. 1300" inputmode="numeric" />
+          </label>
+          <label>or ACT <span class="hint">1–36</span>
+            <input type="number" id="pAct" min="1" max="36" step="1" placeholder="e.g. 29" inputmode="numeric" />
+          </label>
+          <label>GPA <span class="hint">optional, 0–4.0</span>
+            <input type="number" id="pGpa" min="0" max="4" step="0.1" placeholder="e.g. 3.7" inputmode="decimal" />
+          </label>
+          <button type="button" class="btn ghost small" id="clearProfile">Clear</button>
+        </div>
+        <p class="tiny" id="profileNote"></p>
       </div>
 
       <form id="filterForm" class="panel filters">
@@ -115,6 +141,28 @@
         <button class="round save" id="btnSave" title="Save (→)">♥</button>
       </div>
       <p class="deck-hint">Swipe the photo, tap the buttons, or use ← / → keys · tap ℹ for full details</p>
+    </section>
+
+    <!-- ============ COMPARE ============ -->
+    <section class="view" id="view-compare" hidden>
+      <div class="list-head">
+        <h1>Compare two schools</h1>
+        <p class="muted">Pick two schools to see them side by side.</p>
+      </div>
+      <div class="compare-pickers">
+        <div class="picker">
+          <input type="search" class="cmp-search" data-slot="a" placeholder="Search school A…" autocomplete="off" />
+          <div class="cmp-results" data-slot="a" hidden></div>
+        </div>
+        <div class="picker">
+          <input type="search" class="cmp-search" data-slot="b" placeholder="Search school B…" autocomplete="off" />
+          <div class="cmp-results" data-slot="b" hidden></div>
+        </div>
+      </div>
+      <div id="compareTable"></div>
+      <div id="compareEmpty" class="muted center pad">
+        Choose two schools above — or add them from the swipe deck's details or your shortlist.
+      </div>
     </section>
 
     <!-- ============ SHORTLIST ============ -->
