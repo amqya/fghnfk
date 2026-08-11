@@ -100,7 +100,13 @@
 
   const REGIONS = ["Northeast", "Midwest", "South", "West", "Territories"];
   const DEGREES = [["4-year", "🎓 4-year"], ["2-year", "🏫 2-year / community"], ["Graduate", "📚 Grad-focused"]];
-  const CONTROLS = [["Public", "🏛️ Public"], ["Private nonprofit", "🌿 Private nonprofit"], ["For-profit", "💼 For-profit"]];
+  const CONTROLS = [
+    ["Public", "🏛️ Public"],
+    ["Private (any)", "🏫 Private (any)"],
+    ["Private nonprofit", "🌿 Private — nonprofit"],
+    ["For-profit", "💼 Private — for-profit"],
+  ];
+  const CONTROL_GROUP = { "Private (any)": ["Private nonprofit", "For-profit"] };
   const SIZES = ["Very small (<1k)", "Small (1k–3k)", "Medium (3k–10k)", "Large (10k–20k)", "Very large (20k+)"];
   const SETTINGS = [["City", "🏙️ City"], ["Suburb", "🏡 Suburb"], ["Town", "🏘️ Town"], ["Rural", "🌾 Rural"]];
   const SELECTIVITY = ["Most selective", "Highly selective", "Selective", "Less selective", "Test-optional / Open"];
@@ -274,7 +280,11 @@
     if (f.region.length && !f.region.includes(c.region)) return false;
     if (f.state.length && !f.state.includes(c.stateName)) return false;
     if (f.degree.length && !f.degree.includes(c.degree)) return false;
-    if (f.control.length && !f.control.includes(c.control)) return false;
+    if (f.control.length) {
+      const allowed = new Set();
+      f.control.forEach(k => (CONTROL_GROUP[k] || [k]).forEach(v => allowed.add(v)));
+      if (!allowed.has(c.control)) return false;
+    }
     if (f.sizeCategory.length && !f.sizeCategory.includes(c.sizeCategory)) return false;
     if (f.setting.length && !f.setting.includes(c.setting)) return false;
     if (f.selectivity.length && !f.selectivity.includes(c.selectivity)) return false;
